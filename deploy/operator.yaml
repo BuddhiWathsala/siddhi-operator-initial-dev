@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: siddhi-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: siddhi-operator
+  template:
+    metadata:
+      labels:
+        name: siddhi-operator
+    spec:
+      serviceAccountName: siddhi-operator
+      containers:
+        - name: siddhi-operator
+          # Replace this with the built image name
+          image: REPLACE_IMAGE
+          command:
+          - siddhi-operator
+          imagePullPolicy: Always
+          env:
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "siddhi-operator"
