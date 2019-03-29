@@ -1,7 +1,10 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: example-siddhiprocess
+  name: energy-alert-app-siddhi-process
 spec:
   # Add fields here
-  size: 3
+  size: 1
+  apps:
+    - energy-alert-app
+    - sample-deployment
