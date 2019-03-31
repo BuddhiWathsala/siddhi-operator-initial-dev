@@ -217,59 +217,66 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	query := siddhiProcess.Spec.Query
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
-	for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
-		configMap := &corev1.ConfigMap{}
-		reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
-		volume := corev1.Volume {
-			Name: siddhiFileConfigMapName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: siddhiFileConfigMapName,
+	if len(siddhiProcess.Spec.Apps) > 0 {
+		for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
+			configMap := &corev1.ConfigMap{}
+			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
+			volume := corev1.Volume {
+				Name: siddhiFileConfigMapName,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: siddhiFileConfigMapName,
+						},
 					},
 				},
-			},
+			}
+			volumes = append(volumes, volume)
+			for siddhiFileNameValue := range configMap.Data{
+				volumeMount := corev1.VolumeMount{
+					Name: siddhiFileConfigMapName,
+					MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + siddhiFileNameValue,
+					SubPath:  siddhiFileNameValue,
+				}
+				volumeMounts = append(volumeMounts, volumeMount)
+			}
 		}
-		volumes = append(volumes, volume)
-		for siddhiFileNameValue := range configMap.Data{
+	}
+	if query != "" {
+		query = strings.TrimSpace(query)
+		re := regexp.MustCompile(".*@App:name\\(\"(.*)\"\\)")
+		match := re.FindStringSubmatch(query)
+		appName := match[1]
+		configMapName := strings.ToLower(appName)
+		configMap := reconcileSiddhiProcess.configMapForSiddhiApp(siddhiProcess, query, appName)
+		reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+		err := reconcileSiddhiProcess.client.Create(context.TODO(), configMap)
+		if err != nil {
+			reqLogger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+		} else{
+			volume := corev1.Volume {
+				Name: configMapName,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: configMapName,
+						},
+					},
+				},
+			}
+			volumes = append(volumes, volume)
+		
 			volumeMount := corev1.VolumeMount{
-				Name: siddhiFileConfigMapName,
-				MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + siddhiFileNameValue,
-				SubPath:  siddhiFileNameValue,
+				Name: configMapName,
+				MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + appName + ".siddhi",
+				SubPath:  appName + ".siddhi",
 			}
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
-	query = strings.TrimSpace(query)
-	re := regexp.MustCompile(".*@App:name\\(\"(.*)\"\\)")
-	match := re.FindStringSubmatch(query)
-	appName := match[1]
-	configMapName := strings.ToLower(appName)
-	configMap := reconcileSiddhiProcess.configMapForSiddhiApp(siddhiProcess, query, appName)
-	reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
-	err := reconcileSiddhiProcess.client.Create(context.TODO(), configMap)
-	if err != nil {
-		reqLogger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
-	} else{
-		volume := corev1.Volume {
-			Name: configMapName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMapName,
-					},
-				},
-			},
-		}
-		volumes = append(volumes, volume)
 	
-		volumeMount := corev1.VolumeMount{
-			Name: configMapName,
-			MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + appName + ".siddhi",
-			SubPath:  appName + ".siddhi",
-		}
-		volumeMounts = append(volumeMounts, volumeMount)
-	}
+	
+	
 		
 	sidddhiDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
