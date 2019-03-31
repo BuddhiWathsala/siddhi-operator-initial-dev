@@ -10,14 +10,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -205,153 +203,6 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		}
 	}
 	return reconcile.Result{}, nil
-}
-
-// deploymentForMSiddhiProcess returns a siddhiProcess Deployment object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *appsv1.Deployment {
-	labels := labelsForSiddhiProcess(siddhiProcess.Name)
-	replicas := siddhiProcess.Spec.Size
-	numberOfConfigMaps := len(siddhiProcess.Spec.Apps)
-	volumes := make([]corev1.Volume, numberOfConfigMaps)
-	var volumeMounts []corev1.VolumeMount
-	for i, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
-		configMap := &corev1.ConfigMap{}
-		reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
-		volume := corev1.Volume {
-			Name: siddhiFileConfigMapName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: siddhiFileConfigMapName,
-					},
-				},
-			},
-		}
-		volumes[i] = volume
-		for siddhiFileNameValue := range configMap.Data{
-			volumeMount := corev1.VolumeMount{
-				Name: siddhiFileConfigMapName,
-				MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + siddhiFileNameValue,
-				SubPath:  siddhiFileNameValue,
-			}
-			volumeMounts = append(volumeMounts, volumeMount)
-		}
-	}
-
-	sidddhiDeployment := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      siddhiProcess.Name,
-			Namespace: siddhiProcess.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Image: "buddhiwathsala/siddhirunner:v0.0.6",
-							Name:  "siddhirunner-runtime",
-							Command: []string{
-								"sh",
-							},
-							Args: []string{
-								"/home/siddhi-runner-1.0.0-SNAPSHOT/bin/worker.sh",
-							},
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: 8006,
-									Name: "passthrough",
-								},
-							},
-							VolumeMounts: volumeMounts,
-						},
-					},
-					Volumes: volumes,
-				},
-			},
-		},
-	}
-	// Set SiddhiProcess instance as the owner and controller
-	controllerutil.SetControllerReference(siddhiProcess, sidddhiDeployment, reconcileSiddhiProcess.scheme)
-	return sidddhiDeployment
-}
-
-// serviceForSiddhi returns a Siddhi Service object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(m *siddhiv1alpha1.SiddhiProcess) *corev1.Service {
-	labels := labelsForSiddhiProcess(m.Name)
-	service := &corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Service",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: labels,
-			Ports: []corev1.ServicePort{
-				{Name: "passthrough", Port: 8006, Protocol: "TCP"},
-			},
-			Type: "LoadBalancer",
-		},
-	}
-	// Set Siddhi instance as the owner and controller
-	controllerutil.SetControllerReference(m, service, reconcileSiddhiProcess.scheme)
-	return service
-}
-
-// loadBalancerForSiddhi returns a Siddhi Ingress load balancer object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProcess(m *siddhiv1alpha1.SiddhiProcess) *extensionsv1beta1.Ingress {
-	ingress := &extensionsv1beta1.Ingress{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "extensions/v1beta1",
-			Kind:       "Ingress",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
-			Annotations: map[string]string{
-				"kubernetes.io/ingress.class": "nginx",
-				"nginx.ingress.kubernetes.io/rewrite-target": "/",
-				"nginx.ingress.kubernetes.io/ssl-redirect": "false",
-				"nginx.ingress.kubernetes.io/force-ssl-redirect": "false",
-				"nginx.ingress.kubernetes.io/ssl-passthrough": "true",
-				"nginx.ingress.kubernetes.io/affinity": "cookie",
-				"nginx.ingress.kubernetes.io/session-cookie-name": "route",
-				"nginx.ingress.kubernetes.io/session-cookie-hash": "sha1",
-			},
-		},
-		Spec: extensionsv1beta1.IngressSpec{
-			Rules: []extensionsv1beta1.IngressRule{
-				{
-					IngressRuleValue: extensionsv1beta1.IngressRuleValue{
-						HTTP: &extensionsv1beta1.HTTPIngressRuleValue{
-							Paths: []extensionsv1beta1.HTTPIngressPath{
-								{
-									Path:    "/",
-									Backend: extensionsv1beta1.IngressBackend{ServiceName: m.Name, ServicePort: intstr.IntOrString{Type: Int, IntVal: 8006}},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	// Set Siddhi instance as the owner and controller
-	controllerutil.SetControllerReference(m, ingress, reconcileSiddhiProcess.scheme)
-	return ingress
 }
 
 // labelsForSiddhiProcess returns the labels for selecting the resources

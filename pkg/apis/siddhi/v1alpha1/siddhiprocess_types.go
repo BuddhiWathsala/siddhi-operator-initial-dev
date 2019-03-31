@@ -15,6 +15,7 @@ type SiddhiProcessSpec struct {
 	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	Size int32 `json:"size"`
 	Apps []string `json:"apps"`
+	Query string `json:"query"`
 }
 
 // SiddhiProcessStatus defines the observed state of SiddhiProcess

@@ -5,6 +5,4 @@ metadata:
 spec:
   # Add fields here
   size: 1
-  apps:
-    - energy-alert-app
-    - sample-deployment
+
