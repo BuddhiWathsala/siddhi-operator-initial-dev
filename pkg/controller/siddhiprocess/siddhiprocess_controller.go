@@ -3,6 +3,8 @@ package siddhiprocess
 import (
 	"context"
 	"reflect"
+	"regexp"
+	"strings"
 
 	siddhiv1alpha1 "github.com/siddhi-io/siddhi-operator/pkg/apis/siddhi/v1alpha1"
 
@@ -210,11 +212,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 // deploymentForMSiddhiProcess returns a siddhiProcess Deployment object
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *appsv1.Deployment {
 	labels := labelsForSiddhiProcess(siddhiProcess.Name)
+	reqLogger := log.WithValues("Request.Namespace", siddhiProcess.Namespace, "Request.Name", siddhiProcess.Name)
 	replicas := siddhiProcess.Spec.Size
-	numberOfConfigMaps := len(siddhiProcess.Spec.Apps)
-	volumes := make([]corev1.Volume, numberOfConfigMaps)
+	query := siddhiProcess.Spec.Query
+	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
-	for i, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
+	for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
 		configMap := &corev1.ConfigMap{}
 		reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
 		volume := corev1.Volume {
@@ -227,7 +230,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 				},
 			},
 		}
-		volumes[i] = volume
+		volumes = append(volumes, volume)
 		for siddhiFileNameValue := range configMap.Data{
 			volumeMount := corev1.VolumeMount{
 				Name: siddhiFileConfigMapName,
@@ -237,7 +240,37 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
 	}
-
+	query = strings.TrimSpace(query)
+	re := regexp.MustCompile(".*@App:name\\(\"(.*)\"\\)")
+	match := re.FindStringSubmatch(query)
+	appName := match[1]
+	configMapName := strings.ToLower(appName)
+	configMap := reconcileSiddhiProcess.configMapForSiddhiApp(siddhiProcess, query, appName)
+	reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+	err := reconcileSiddhiProcess.client.Create(context.TODO(), configMap)
+	if err != nil {
+		reqLogger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+	} else{
+		volume := corev1.Volume {
+			Name: configMapName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: configMapName,
+					},
+				},
+			},
+		}
+		volumes = append(volumes, volume)
+	
+		volumeMount := corev1.VolumeMount{
+			Name: configMapName,
+			MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + appName + ".siddhi",
+			SubPath:  appName + ".siddhi",
+		}
+		volumeMounts = append(volumeMounts, volumeMount)
+	}
+		
 	sidddhiDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -284,6 +317,27 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	// Set SiddhiProcess instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, sidddhiDeployment, reconcileSiddhiProcess.scheme)
 	return sidddhiDeployment
+}
+
+// serviceForSiddhi returns a Siddhi Service object
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForSiddhiApp(siddhiProcess *siddhiv1alpha1.SiddhiProcess, query string, appName string) *corev1.ConfigMap {
+	configMapKey := appName + ".siddhi"
+	configMap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.ToLower(appName),
+			Namespace: siddhiProcess.Namespace,
+		},
+		Data: map[string]string{
+			configMapKey: query,
+		},
+	}
+	// Set Siddhi instance as the owner and controller
+	controllerutil.SetControllerReference(siddhiProcess, configMap, reconcileSiddhiProcess.scheme)
+	return configMap
 }
 
 // serviceForSiddhi returns a Siddhi Service object

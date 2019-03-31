@@ -5,6 +5,17 @@ metadata:
 spec:
   # Add fields here
   size: 1
-  apps:
-    - energy-alert-app
-    - sample-deployment
+  query: |
+    @App:name("Energy-Alert-App-Temp")
+    @App:description("Description of the plan") 
+
+    @source(type='http', receiver.url='http://0.0.0.0:8006/devicePowerStream2', basic.auth.enabled='false', @map(type='json'))
+    define stream DevicePowerStream (type string, deviceID string, power int);
+
+    @sink(type='log', prefix='LOGGER')
+    define stream MonitorDevicesPowerStream(deviceID string, power int);
+
+    @info(name='monitored-filter')
+    from DevicePowerStream[type == 'monitored']
+    select deviceID, power
+    insert into MonitorDevicesPowerStream;
