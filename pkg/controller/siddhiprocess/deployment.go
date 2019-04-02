@@ -21,7 +21,6 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	reqLogger := log.WithValues("Request.Namespace", siddhiProcess.Namespace, "Request.Name", siddhiProcess.Name)
 	replicas := siddhiProcess.Spec.Size
 	query := siddhiProcess.Spec.Query
-	secrets := siddhiProcess.Spec.Secrets
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
 	var imagePullSecrets []corev1.LocalObjectReference
@@ -86,13 +85,13 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	} else {
 		err = errors.New("CRD must have either query or app entry to deploy siddhi apps")
 	}
-	if len(secrets) > 0 {
-		for _, secret := range secrets{
-			localObject := corev1.LocalObjectReference{
-				Name: string(secret.Name),
-			}
-			imagePullSecrets = append(imagePullSecrets, localObject)
+	operatorDeployment := &appsv1.Deployment{}
+	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
+	if err == nil{
+		localObject := corev1.LocalObjectReference{
+			Name: string(operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImagePullSecrets"]),
 		}
+		imagePullSecrets = append(imagePullSecrets, localObject)
 	}
 	sidddhiDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{

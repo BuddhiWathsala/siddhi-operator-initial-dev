@@ -37,19 +37,15 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	reqLogger := log.WithValues("Request.Namespace")
-
 	// Create a new controller
 	c, err := controller.New("siddhiprocess-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
-		reqLogger.Error(err, err.Error())
 		return err
 	}
 
 	// Watch for changes to primary resource SiddhiProcess
 	err = c.Watch(&source.Kind{Type: &siddhiv1alpha1.SiddhiProcess{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
-		reqLogger.Error(err, err.Error())
 		return err
 	}
 
@@ -60,7 +56,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		OwnerType:    &siddhiv1alpha1.SiddhiProcess{},
 	})
 	if err != nil {
-		reqLogger.Error(err, err.Error())
 		return err
 	}
 
@@ -86,7 +81,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SiddhiProcess")
 	reqLogger.Info(request.Namespace)
-
+	
 	// Fetch the SiddhiProcess instance
 	siddhiProcess := &siddhiv1alpha1.SiddhiProcess{}
 	err := reconcileSiddhiProcess.client.Get(context.TODO(), request.NamespacedName, siddhiProcess)
@@ -100,6 +95,8 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
+	
 
 	// Check if the deployment already exists, if not create a new one
 	deployment := &appsv1.Deployment{}

@@ -7,11 +7,6 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// Secret is used to store K8s secrets in this struct
-type Secret struct{
-	Name string
-}
-
 // SiddhiProcessSpec defines the desired state of SiddhiProcess
 // +k8s:openapi-gen=true
 type SiddhiProcessSpec struct {
@@ -21,7 +16,6 @@ type SiddhiProcessSpec struct {
 	Size int32 `json:"size"`
 	Apps []string `json:"apps"`
 	Query string `json:"query"`
-	Secrets []Secret `json:"imagePullSecrets"`
 }
 
 // SiddhiProcessStatus defines the observed state of SiddhiProcess

@@ -5,8 +5,8 @@ metadata:
 spec:
   # Add fields here
   size: 1
-  imagePullSecrets:
-    - name: regcred
+  jars:
+    - mysql
   query: |
     @App:name("Energy-Alert-App-Temp") 
     @App:description("Description of the plan") 
