@@ -9,6 +9,22 @@ import(
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+// IntOrString integer or string
+type IntOrString struct {
+	Type   Type   `protobuf:"varint,1,opt,name=type,casttype=Type"`
+	IntVal int32  `protobuf:"varint,2,opt,name=intVal"`
+	StrVal string `protobuf:"bytes,3,opt,name=strVal"`
+}
+
+// Type represents the stored type of IntOrString.
+type Type int
+
+// Int - Type
+const (
+	Int intstr.Type = iota
+	String
+)
+
 // loadBalancerForSiddhi returns a Siddhi Ingress load balancer object
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProcess(m *siddhiv1alpha1.SiddhiProcess) *extensionsv1beta1.Ingress {
 	ingress := &extensionsv1beta1.Ingress{

@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -24,22 +23,6 @@ import (
 )
 
 var log = logf.Log.WithName("controller_siddhiprocess")
-
-// IntOrString integer or string
-type IntOrString struct {
-	Type   Type   `protobuf:"varint,1,opt,name=type,casttype=Type"`
-	IntVal int32  `protobuf:"varint,2,opt,name=intVal"`
-	StrVal string `protobuf:"bytes,3,opt,name=strVal"`
-}
-
-// Type represents the stored type of IntOrString.
-type Type int
-
-// Int - Type
-const (
-	Int intstr.Type = iota
-	String
-)
 
 // Add creates a new SiddhiProcess Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -54,15 +37,19 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
+	reqLogger := log.WithValues("Request.Namespace")
+
 	// Create a new controller
 	c, err := controller.New("siddhiprocess-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
+		reqLogger.Error(err, err.Error())
 		return err
 	}
 
 	// Watch for changes to primary resource SiddhiProcess
 	err = c.Watch(&source.Kind{Type: &siddhiv1alpha1.SiddhiProcess{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
+		reqLogger.Error(err, err.Error())
 		return err
 	}
 
@@ -73,6 +60,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		OwnerType:    &siddhiv1alpha1.SiddhiProcess{},
 	})
 	if err != nil {
+		reqLogger.Error(err, err.Error())
 		return err
 	}
 
@@ -97,6 +85,7 @@ type ReconcileSiddhiProcess struct {
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SiddhiProcess")
+	reqLogger.Info(request.Namespace)
 
 	// Fetch the SiddhiProcess instance
 	siddhiProcess := &siddhiv1alpha1.SiddhiProcess{}
@@ -117,13 +106,18 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		siddhiDeployment := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess)
+		siddhiDeployment, err := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess)
+		if err != nil{
+			reqLogger.Error(err, err.Error())
+			return reconcile.Result{}, err
+		}
 		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", siddhiDeployment.Namespace, "Deployment.Name", siddhiDeployment.Name)
 		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiDeployment)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", siddhiDeployment.Namespace, "Deployment.Name", siddhiDeployment.Name)
 			return reconcile.Result{}, err
 		}
+		
 		// Deployment created successfully - return and requeue
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -202,7 +196,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 			return reconcile.Result{}, err
 		}
 	}
-	return reconcile.Result{}, nil
+	return reconcile.Result{}, err
 }
 
 // labelsForSiddhiProcess returns the labels for selecting the resources

@@ -16,7 +16,7 @@ spec:
       containers:
         - name: siddhi-operator
           # Replace this with the built image name
-          image: REPLACE_IMAGE
+          image: docker.io/buddhiwathsala/siddhi-operator:test
           command:
           - siddhi-operator
           imagePullPolicy: Always

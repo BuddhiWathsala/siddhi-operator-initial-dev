@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi7/ubi-minimal:7.6
+FROM alpine:3.8
 
 ENV OPERATOR=/usr/local/bin/siddhi-operator \
     USER_UID=1001 \

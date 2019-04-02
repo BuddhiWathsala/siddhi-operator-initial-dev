@@ -4,6 +4,7 @@ import(
 	"regexp"
 	"strings"
 	"context"
+	"errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,14 +16,17 @@ import(
 )
 
 // deploymentForMSiddhiProcess returns a siddhiProcess Deployment object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *appsv1.Deployment {
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) (*appsv1.Deployment, error) {
 	labels := labelsForSiddhiProcess(siddhiProcess.Name)
 	reqLogger := log.WithValues("Request.Namespace", siddhiProcess.Namespace, "Request.Name", siddhiProcess.Name)
 	replicas := siddhiProcess.Spec.Size
 	query := siddhiProcess.Spec.Query
+	secrets := siddhiProcess.Spec.Secrets
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
-	if len(siddhiProcess.Spec.Apps) > 0 {
+	var imagePullSecrets []corev1.LocalObjectReference
+	var err error
+	if  (query == "") && (len(siddhiProcess.Spec.Apps) > 0) {
 		for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
 			configMap := &corev1.ConfigMap{}
 			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
@@ -46,8 +50,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 				volumeMounts = append(volumeMounts, volumeMount)
 			}
 		}
-	}
-	if query != "" {
+	} else if (query != "") && (len(siddhiProcess.Spec.Apps) <= 0){
 		query = strings.TrimSpace(query)
 		re := regexp.MustCompile(".*@App:name\\(\"(.*)\"\\)")
 		match := re.FindStringSubmatch(query)
@@ -78,7 +81,19 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 			}
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
-	}	
+	} else if (query != "") && (len(siddhiProcess.Spec.Apps) > 0){
+		err = errors.New("CRD should only contain either query or app entry")
+	} else {
+		err = errors.New("CRD must have either query or app entry to deploy siddhi apps")
+	}
+	if len(secrets) > 0 {
+		for _, secret := range secrets{
+			localObject := corev1.LocalObjectReference{
+				Name: string(secret.Name),
+			}
+			imagePullSecrets = append(imagePullSecrets, localObject)
+		}
+	}
 	sidddhiDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -117,6 +132,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 							VolumeMounts: volumeMounts,
 						},
 					},
+					ImagePullSecrets: imagePullSecrets,
 					Volumes: volumes,
 				},
 			},
@@ -124,7 +140,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	}
 	// Set SiddhiProcess instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, sidddhiDeployment, reconcileSiddhiProcess.scheme)
-	return sidddhiDeployment
+	return sidddhiDeployment, err
 }
 
 // serviceForSiddhi returns a Siddhi Service object
