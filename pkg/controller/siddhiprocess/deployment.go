@@ -21,9 +21,11 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	reqLogger := log.WithValues("Request.Namespace", siddhiProcess.Namespace, "Request.Name", siddhiProcess.Name)
 	replicas := siddhiProcess.Spec.Size
 	query := siddhiProcess.Spec.Query
+	// siddhiConfig := siddhiProcess.Spec.SiddhiConfig
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
 	var imagePullSecrets []corev1.LocalObjectReference
+	var enviromentVariables []corev1.EnvVar
 	var err error
 	if  (query == "") && (len(siddhiProcess.Spec.Apps) > 0) {
 		for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
@@ -85,6 +87,16 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	} else {
 		err = errors.New("CRD must have either query or app entry to deploy siddhi apps")
 	}
+
+	if len(siddhiProcess.Spec.EnviromentVariables) > 0 {
+		for _, enviromentVariable := range siddhiProcess.Spec.EnviromentVariables {
+			env := corev1.EnvVar{
+				Name: enviromentVariable.Name,
+				Value: enviromentVariable.Value,
+			}
+			enviromentVariables = append(enviromentVariables, env)
+		}
+	}
 	operatorDeployment := &appsv1.Deployment{}
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
 	if err == nil{
@@ -129,6 +141,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 								},
 							},
 							VolumeMounts: volumeMounts,
+							Env: enviromentVariables,
 						},
 					},
 					ImagePullSecrets: imagePullSecrets,

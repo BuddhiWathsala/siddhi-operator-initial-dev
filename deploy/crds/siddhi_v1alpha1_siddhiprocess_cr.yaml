@@ -3,10 +3,13 @@ kind: SiddhiProcess
 metadata:
   name: energy-alert-app-siddhi-process
 spec:
-  # Add fields here
   size: 1
-  jars:
-    - mysql
+  env: 
+    - name: RECEIVER_URL
+      value: "http://0.0.0.0:8006"
+    - name: BASIC_AUTH_ENABLED
+      value: "false"
+
   query: |
     @App:name("Energy-Alert-App-Temp") 
     @App:description("Description of the plan") 
@@ -20,6 +23,17 @@ spec:
     @info(name='monitored-filter')
     from DevicePowerStream[type == 'monitored']
     select deviceID, power
-    insert into MonitorDevicesPowerStream;
+    insert into MonitorDevicesPowerStream; 
+  siddhi: |
+    refs:
+        - ref:
+          name: 'passthroughDevicePower'
+          type: 'http'
+          properties:
+            receiver.url: ${RECEIVER_URL}/devicePowerStream
+            basic.auth.enabled: ${BASIC_AUTH_ENABLED}
+  
+
+
 
 

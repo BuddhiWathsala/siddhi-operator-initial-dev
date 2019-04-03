@@ -95,9 +95,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
 	
-
 	// Check if the deployment already exists, if not create a new one
 	deployment := &appsv1.Deployment{}
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, deployment)
@@ -171,7 +169,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		reqLogger.Error(err, "Failed to get Ingress")
 		return reconcile.Result{}, err
 	}
-
+	
 	// Update the SiddhiProcess status with the pod names
 	// List the pods for this siddhiProcess's deployment
 	podList := &corev1.PodList{}
