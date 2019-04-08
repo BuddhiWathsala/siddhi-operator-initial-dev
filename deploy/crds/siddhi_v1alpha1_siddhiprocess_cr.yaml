@@ -1,29 +1,19 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: energy-alert-app-siddhi-process
+  name: siddhi-apps
 spec:
   size: 1
   env: 
-    - name: RECEIVER_URL
-      value: "http://0.0.0.0:8006"
+    - name: RECEIVER1_URL
+      value: "http://0.0.0.0:8006/foo"
+    - name: RECEIVER2_URL
+      value: "http://0.0.0.0:8007/bar"
     - name: BASIC_AUTH_ENABLED
       value: "false"
 
-  query: |
-    @App:name("Energy-Alert-App-Temp") 
-    @App:description("Description of the plan") 
-
-    @source(type='http', receiver.url='http://0.0.0.0:8006/devicePowerStream2', basic.auth.enabled='false', @map(type='json'))
-    define stream DevicePowerStream (type string, deviceID string, power int);
-
-    @sink(type='log', prefix='LOGGER')
-    define stream MonitorDevicesPowerStream(deviceID string, power int);
-
-    @info(name='monitored-filter')
-    from DevicePowerStream[type == 'monitored']
-    select deviceID, power
-    insert into MonitorDevicesPowerStream; 
+  apps:
+    - siddhi-apps
   siddhi: |
     refs:
         - ref:

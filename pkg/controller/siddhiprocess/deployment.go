@@ -22,10 +22,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	replicas := siddhiProcess.Spec.Size
 	query := siddhiProcess.Spec.Query
 	// siddhiConfig := siddhiProcess.Spec.SiddhiConfig
+	siddhiRunnerImage := "buddhiwathsala/siddhirunner:v0.0.6"
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
 	var imagePullSecrets []corev1.LocalObjectReference
 	var enviromentVariables []corev1.EnvVar
+	var containerPorts []corev1.ContainerPort
 	var err error
 	if  (query == "") && (len(siddhiProcess.Spec.Apps) > 0) {
 		for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
@@ -87,24 +89,27 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	} else {
 		err = errors.New("CRD must have either query or app entry to deploy siddhi apps")
 	}
-
-	if len(siddhiProcess.Spec.EnviromentVariables) > 0 {
-		for _, enviromentVariable := range siddhiProcess.Spec.EnviromentVariables {
-			env := corev1.EnvVar{
-				Name: enviromentVariable.Name,
-				Value: enviromentVariable.Value,
+	var siddhiApps []SiddhiApp
+	siddhiApps = getSiddhiAppInfo() 
+	for _, siddhiApp := range siddhiApps{
+		for _, port := range siddhiApp.Ports{
+			containerPort := corev1.ContainerPort{
+				ContainerPort: int32(port),
 			}
-			enviromentVariables = append(enviromentVariables, env)
+			containerPorts = append(containerPorts, containerPort)
 		}
 	}
-	operatorDeployment := &appsv1.Deployment{}
-	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
-	if err == nil{
-		localObject := corev1.LocalObjectReference{
-			Name: string(operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImagePullSecrets"]),
-		}
-		imagePullSecrets = append(imagePullSecrets, localObject)
-	}
+	// operatorDeployment := &appsv1.Deployment{}
+	// err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
+	// if err == nil{
+	// 	localObject := corev1.LocalObjectReference{
+	// 		Name: string(operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImagePullSecrets"]),
+	// 	}
+	// 	imagePullSecrets = append(imagePullSecrets, localObject)
+	// 	if operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImage"] != "" {
+	// 		siddhiRunnerImage = operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImage"]
+	// 	}
+	// }
 	sidddhiDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -126,7 +131,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Image: "buddhiwathsala/siddhirunner:v0.0.6",
+							Image: siddhiRunnerImage,
 							Name:  "siddhirunner-runtime",
 							Command: []string{
 								"sh",
@@ -134,12 +139,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 							Args: []string{
 								"/home/siddhi-runner-1.0.0-SNAPSHOT/bin/worker.sh",
 							},
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: 8006,
-									Name: "passthrough",
-								},
-							},
+							Ports: containerPorts,
 							VolumeMounts: volumeMounts,
 							Env: enviromentVariables,
 						},
@@ -150,12 +150,11 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 			},
 		},
 	}
-	// Set SiddhiProcess instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, sidddhiDeployment, reconcileSiddhiProcess.scheme)
 	return sidddhiDeployment, err
 }
 
-// serviceForSiddhi returns a Siddhi Service object
+// configMapForSiddhiApp returns a config map for the query string specified by the user in CRD
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForSiddhiApp(siddhiProcess *siddhiv1alpha1.SiddhiProcess, query string, appName string) *corev1.ConfigMap {
 	configMapKey := appName + ".siddhi"
 	configMap := &corev1.ConfigMap{
@@ -171,7 +170,6 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForSiddhiApp(sidd
 			configMapKey: query,
 		},
 	}
-	// Set Siddhi instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, configMap, reconcileSiddhiProcess.scheme)
 	return configMap
 }
