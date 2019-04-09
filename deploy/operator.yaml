@@ -2,6 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: siddhi-operator
+  annotations:
+    siddhiRunnerImage: buddhiwathsala/siddhirunner:v0.0.6
+    siddhiRunnerImagePullSecrets: siddhisecret
 spec:
   replicas: 1
   selector:
@@ -15,8 +18,7 @@ spec:
       serviceAccountName: siddhi-operator
       containers:
         - name: siddhi-operator
-          # Replace this with the built image name
-          image: REPLACE_IMAGE
+          image: docker.io/buddhiwathsala/siddhi-operator:test
           command:
           - siddhi-operator
           imagePullPolicy: Always
@@ -31,3 +33,71 @@ spec:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
               value: "siddhi-operator"
+
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+  generation: 1
+  name: siddhi-process-msf4j
+  namespace: default
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      instance: siddhi-process-msf4j
+      name: SiddhiProcess
+      part-of: siddhi-process-msf4j
+      version: 1.0.0
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        instance: siddhi-process-msf4j
+        name: SiddhiProcess
+        part-of: siddhi-process-msf4j
+        version: 1.0.0
+    spec:
+      containers:
+      - image: buddhiwathsala/msf4j-siddhi-sample:v0.0.4
+        imagePullPolicy: IfNotPresent
+        name: siddhirunner-msf4j
+        ports:
+        - containerPort: 9095
+          name: port
+          protocol: TCP
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: siddhi-process-msf4j
+  namespace: default
+spec:
+  clusterIP: 10.108.98.162
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: msf4j
+    nodePort: 32001
+    port: 9095
+    protocol: TCP
+    targetPort: 9095
+  selector:
+    instance: siddhi-process-msf4j
+    name: SiddhiProcess
+    part-of: siddhi-process-msf4j
+    version: 1.0.0
+  sessionAffinity: None
+  type: LoadBalancer
+status:
+  loadBalancer: {}

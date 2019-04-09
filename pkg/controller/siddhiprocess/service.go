@@ -1,6 +1,8 @@
 package siddhiprocess
 
 import(
+	"strconv"
+	"strings"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	siddhiv1alpha1 "github.com/siddhi-io/siddhi-operator/pkg/apis/siddhi/v1alpha1"
@@ -9,26 +11,33 @@ import(
 )
 
 // serviceForSiddhi returns a Siddhi Service object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(m *siddhiv1alpha1.SiddhiProcess) *corev1.Service {
-	labels := labelsForSiddhiProcess(m.Name)
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *corev1.Service {
+	labels := labelsForSiddhiProcess(siddhiProcess.Name)
+	var servicePorts []corev1.ServicePort
+	var siddhiApp SiddhiApp
+	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	for _, port := range siddhiApp.Ports{
+		servicePort := corev1.ServicePort{
+			Port: int32(port),
+			Name: strings.ToLower(siddhiApp.Name) + strconv.Itoa(port),
+		}
+		servicePorts = append(servicePorts, servicePort)
+	}
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      m.Name,
-			Namespace: m.Namespace,
+			Name:      siddhiProcess.Name,
+			Namespace: siddhiProcess.Namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
-			Ports: []corev1.ServicePort{
-				{Name: "passthrough", Port: 8006, Protocol: "TCP"},
-			},
-			Type: "LoadBalancer",
+			Ports: servicePorts,
+			Type: "ClusterIP",
 		},
 	}
-	// Set Siddhi instance as the owner and controller
-	controllerutil.SetControllerReference(m, service, reconcileSiddhiProcess.scheme)
+	controllerutil.SetControllerReference(siddhiProcess, service, reconcileSiddhiProcess.scheme)
 	return service
 }

@@ -4,6 +4,7 @@ import(
 	"regexp"
 	"strings"
 	"context"
+	"errors"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,43 +16,60 @@ import(
 )
 
 // deploymentForMSiddhiProcess returns a siddhiProcess Deployment object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *appsv1.Deployment {
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) (*appsv1.Deployment, error) {
 	labels := labelsForSiddhiProcess(siddhiProcess.Name)
 	reqLogger := log.WithValues("Request.Namespace", siddhiProcess.Namespace, "Request.Name", siddhiProcess.Name)
 	replicas := siddhiProcess.Spec.Size
 	query := siddhiProcess.Spec.Query
+	siddhiConfig := siddhiProcess.Spec.SiddhiConfig
+	deploymentYAMLConfigMapName := "deployment.yaml"
+	// home := "/home/wso2carbon/"
+	// siddhiHome := home + "siddhi-runner-1.0.0/"
+	home := "/home/"
+	siddhiHome := home + "siddhi-runner-1.0.0-SNAPSHOT/"
+	siddhiRunnerImage := "buddhiwathsala/siddhirunner:v0.0.6"
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
-	if len(siddhiProcess.Spec.Apps) > 0 {
+	var imagePullSecrets []corev1.LocalObjectReference
+	var enviromentVariables []corev1.EnvVar
+	var containerPorts []corev1.ContainerPort
+	var err error
+	var siddhiApp SiddhiApp
+	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	for _, port := range siddhiApp.Ports{
+		containerPort := corev1.ContainerPort{
+			ContainerPort: int32(port),
+		}
+		containerPorts = append(containerPorts, containerPort)
+	}
+	if  (query == "") && (len(siddhiProcess.Spec.Apps) > 0) {
 		for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
 			configMap := &corev1.ConfigMap{}
-			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
+			configMapName := siddhiFileConfigMapName + "-siddhi"
+			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: configMapName, Namespace: siddhiProcess.Namespace}, configMap)
 			volume := corev1.Volume {
-				Name: siddhiFileConfigMapName,
+				Name: configMapName,
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: siddhiFileConfigMapName,
+							Name: configMapName,
 						},
 					},
 				},
 			}
 			volumes = append(volumes, volume)
-			for siddhiFileNameValue := range configMap.Data{
+			for siddhiFileName := range configMap.Data{
 				volumeMount := corev1.VolumeMount{
-					Name: siddhiFileConfigMapName,
-					MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + siddhiFileNameValue,
-					SubPath:  siddhiFileNameValue,
+					Name: configMapName,
+					MountPath: siddhiHome + "wso2/worker/deployment/siddhi-files/" + siddhiFileName,
+					SubPath:  siddhiFileName,
 				}
 				volumeMounts = append(volumeMounts, volumeMount)
 			}
 		}
-	}
-	if query != "" {
+	} else if (query != "") && (len(siddhiProcess.Spec.Apps) <= 0){
 		query = strings.TrimSpace(query)
-		re := regexp.MustCompile(".*@App:name\\(\"(.*)\"\\)")
-		match := re.FindStringSubmatch(query)
-		appName := match[1]
+		appName := getAppName(query)
 		configMapName := strings.ToLower(appName)
 		configMap := reconcileSiddhiProcess.configMapForSiddhiApp(siddhiProcess, query, appName)
 		reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
@@ -73,12 +91,67 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 		
 			volumeMount := corev1.VolumeMount{
 				Name: configMapName,
-				MountPath: "/home/siddhi-runner-1.0.0-SNAPSHOT/wso2/worker/deployment/siddhi-files/" + appName + ".siddhi",
+				MountPath: siddhiHome + "wso2/worker/deployment/siddhi-files/" + appName + ".siddhi",
 				SubPath:  appName + ".siddhi",
 			}
 			volumeMounts = append(volumeMounts, volumeMount)
 		}
-	}	
+	} else if (query != "") && (len(siddhiProcess.Spec.Apps) > 0){
+		err = errors.New("CRD should only contain either query or app entry")
+	} else {
+		err = errors.New("CRD must have either query or app entry to deploy siddhi apps")
+	}
+	
+	configParameter := ""
+	if siddhiConfig != ""{
+		configMap := reconcileSiddhiProcess.configMapForDeploymentYAML(siddhiProcess, siddhiConfig, deploymentYAMLConfigMapName)
+		reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+		err := reconcileSiddhiProcess.client.Create(context.TODO(), configMap)
+		if err != nil {
+			reqLogger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
+		} else{
+			volume := corev1.Volume {
+				Name: "deploymentconfig",
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: deploymentYAMLConfigMapName,
+						},
+					},
+				},
+			}
+			volumes = append(volumes, volume)
+		
+			volumeMount := corev1.VolumeMount{
+				Name: "deploymentconfig",
+				MountPath: home + "configs",
+			}
+			volumeMounts = append(volumeMounts, volumeMount)
+		}
+		configParameter = "-Dconfig=" +  home + "configs/deployment.yaml"
+	}
+
+	if len(siddhiProcess.Spec.EnviromentVariables) > 0 {
+		for _, enviromentVariable := range siddhiProcess.Spec.EnviromentVariables {
+			env := corev1.EnvVar{
+				Name: enviromentVariable.Name,
+				Value: enviromentVariable.Value,
+			}
+			enviromentVariables = append(enviromentVariables, env)
+		}
+	}
+	// operatorDeployment := &appsv1.Deployment{}
+	// err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
+	// if err == nil{
+	// 	localObject := corev1.LocalObjectReference{
+	// 		Name: string(operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImagePullSecrets"]),
+	// 	}
+	// 	imagePullSecrets = append(imagePullSecrets, localObject)
+	// 	if operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImage"] != "" {
+	// 		siddhiRunnerImage = operatorDeployment.ObjectMeta.Annotations["siddhiRunnerImage"]
+	// 	}
+	// }
+	// userID := int64(802)
 	sidddhiDeployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -100,34 +173,35 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Image: "buddhiwathsala/siddhirunner:v0.0.6",
+							Image: siddhiRunnerImage,
 							Name:  "siddhirunner-runtime",
 							Command: []string{
-								"sh",
+								"/bin/bash",
 							},
 							Args: []string{
-								"/home/siddhi-runner-1.0.0-SNAPSHOT/bin/worker.sh",
+								siddhiHome + "bin/worker.sh",
+								configParameter,
 							},
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: 8006,
-									Name: "passthrough",
-								},
-							},
+							Ports: containerPorts,
 							VolumeMounts: volumeMounts,
+							Env: enviromentVariables,
+							// SecurityContext: &corev1.SecurityContext{
+							// 	RunAsUser: &userID,
+							// },
+							ImagePullPolicy: corev1.PullAlways,
 						},
 					},
+					ImagePullSecrets: imagePullSecrets,
 					Volumes: volumes,
 				},
 			},
 		},
 	}
-	// Set SiddhiProcess instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, sidddhiDeployment, reconcileSiddhiProcess.scheme)
-	return sidddhiDeployment
+	return sidddhiDeployment, err
 }
 
-// serviceForSiddhi returns a Siddhi Service object
+// configMapForSiddhiApp returns a config map for the query string specified by the user in CRD
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForSiddhiApp(siddhiProcess *siddhiv1alpha1.SiddhiProcess, query string, appName string) *corev1.ConfigMap {
 	configMapKey := appName + ".siddhi"
 	configMap := &corev1.ConfigMap{
@@ -143,7 +217,33 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForSiddhiApp(sidd
 			configMapKey: query,
 		},
 	}
-	// Set Siddhi instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, configMap, reconcileSiddhiProcess.scheme)
 	return configMap
+}
+
+// configMapForSiddhiApp returns a config map for the query string specified by the user in CRD
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForDeploymentYAML(siddhiProcess *siddhiv1alpha1.SiddhiProcess, config string, configName string) *corev1.ConfigMap {
+	
+	configMap := &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configName,
+			Namespace: siddhiProcess.Namespace,
+		},
+		Data: map[string]string{
+			configName: config,
+		},
+	}
+	controllerutil.SetControllerReference(siddhiProcess, configMap, reconcileSiddhiProcess.scheme)
+	return configMap
+}
+
+func getAppName(app string) (appName string){
+	re := regexp.MustCompile(".*@App:name\\(\"(.*)\"\\)")
+	match := re.FindStringSubmatch(app)
+	appName = match[1]
+	return appName
 }

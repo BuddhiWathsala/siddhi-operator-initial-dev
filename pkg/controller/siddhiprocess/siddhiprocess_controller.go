@@ -13,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -24,22 +23,6 @@ import (
 )
 
 var log = logf.Log.WithName("controller_siddhiprocess")
-
-// IntOrString integer or string
-type IntOrString struct {
-	Type   Type   `protobuf:"varint,1,opt,name=type,casttype=Type"`
-	IntVal int32  `protobuf:"varint,2,opt,name=intVal"`
-	StrVal string `protobuf:"bytes,3,opt,name=strVal"`
-}
-
-// Type represents the stored type of IntOrString.
-type Type int
-
-// Int - Type
-const (
-	Int intstr.Type = iota
-	String
-)
 
 // Add creates a new SiddhiProcess Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -97,7 +80,8 @@ type ReconcileSiddhiProcess struct {
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SiddhiProcess")
-
+	reqLogger.Info(request.Namespace)
+	
 	// Fetch the SiddhiProcess instance
 	siddhiProcess := &siddhiv1alpha1.SiddhiProcess{}
 	err := reconcileSiddhiProcess.client.Get(context.TODO(), request.NamespacedName, siddhiProcess)
@@ -111,19 +95,24 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
+	
 	// Check if the deployment already exists, if not create a new one
 	deployment := &appsv1.Deployment{}
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		siddhiDeployment := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess)
+		siddhiDeployment, err := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess)
+		if err != nil{
+			reqLogger.Error(err, err.Error())
+			return reconcile.Result{}, err
+		}
 		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", siddhiDeployment.Namespace, "Deployment.Name", siddhiDeployment.Name)
 		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiDeployment)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", siddhiDeployment.Namespace, "Deployment.Name", siddhiDeployment.Name)
 			return reconcile.Result{}, err
 		}
+		
 		// Deployment created successfully - return and requeue
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
@@ -163,7 +152,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	}
 
 	ingress := &extensionsv1beta1.Ingress{}
-	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, ingress)
+	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi", Namespace: siddhiProcess.Namespace}, ingress)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new Ingress
 		siddhiIngress := reconcileSiddhiProcess.loadBalancerForSiddhiProcess(siddhiProcess)
@@ -176,11 +165,22 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		// Ingress created successfully - return and requeue
 		reqLogger.Info("Ingress created successfully")
 		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil {
+	} else if err == nil{
+		siddhiIngress := reconcileSiddhiProcess.updatedLoadBalancerForSiddhiProcess(siddhiProcess, ingress)
+		reqLogger.Info("Updating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+		err = reconcileSiddhiProcess.client.Update(context.TODO(), siddhiIngress)
+		if err != nil {
+			reqLogger.Error(err, "Failed to updated new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+			return reconcile.Result{}, err
+		}
+		// Ingress updated successfully - return and requeue
+		reqLogger.Info("Ingress updated successfully")
+		return reconcile.Result{Requeue: true}, nil
+	} else if err != nil{
 		reqLogger.Error(err, "Failed to get Ingress")
 		return reconcile.Result{}, err
 	}
-
+	
 	// Update the SiddhiProcess status with the pod names
 	// List the pods for this siddhiProcess's deployment
 	podList := &corev1.PodList{}
@@ -202,7 +202,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 			return reconcile.Result{}, err
 		}
 	}
-	return reconcile.Result{}, nil
+	return reconcile.Result{}, err
 }
 
 // labelsForSiddhiProcess returns the labels for selecting the resources

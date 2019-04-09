@@ -4,6 +4,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// EnviromentVariable strote env
+type EnviromentVariable struct{
+	Name string `json:"name"`
+	Value string `json:"value"`
+}
+
+// SiddhiIngress contains ingress specs for siddhi 
+type SiddhiIngress struct{
+	TLSSpec TLS `json:"tls"`
+}
+// TLS contains the TLS configuration of ingress
+type TLS struct{
+	SecretName string `json:"secretName"`
+}
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -16,6 +30,9 @@ type SiddhiProcessSpec struct {
 	Size int32 `json:"size"`
 	Apps []string `json:"apps"`
 	Query string `json:"query"`
+	SiddhiConfig string `json:"siddhi.runner.configs"`
+	EnviromentVariables []EnviromentVariable `json:"env"`
+	SiddhiIngress SiddhiIngress `json:"ingress"`
 }
 
 // SiddhiProcessStatus defines the observed state of SiddhiProcess
