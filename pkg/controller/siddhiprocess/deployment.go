@@ -45,13 +45,14 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	if  (query == "") && (len(siddhiProcess.Spec.Apps) > 0) {
 		for _, siddhiFileConfigMapName := range siddhiProcess.Spec.Apps {
 			configMap := &corev1.ConfigMap{}
-			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
+			configMapName := siddhiFileConfigMapName + "-siddhi"
+			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: configMapName, Namespace: siddhiProcess.Namespace}, configMap)
 			volume := corev1.Volume {
-				Name: siddhiFileConfigMapName,
+				Name: configMapName,
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: siddhiFileConfigMapName,
+							Name: configMapName,
 						},
 					},
 				},
@@ -59,7 +60,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 			volumes = append(volumes, volume)
 			for siddhiFileName := range configMap.Data{
 				volumeMount := corev1.VolumeMount{
-					Name: siddhiFileConfigMapName,
+					Name: configMapName,
 					MountPath: siddhiHome + "wso2/worker/deployment/siddhi-files/" + siddhiFileName,
 					SubPath:  siddhiFileName,
 				}
