@@ -1,27 +1,23 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: siddhi-apps
+  name: app2
 spec:
   size: 1
+  ingress:
+    tls:
+      secretName: siddhi-tls
   env: 
-    - name: RECEIVER1_URL
+    - name: RECEIVER_URL
       value: "http://0.0.0.0:8006/foo"
     - name: RECEIVER2_URL
       value: "http://0.0.0.0:8007/bar"
     - name: BASIC_AUTH_ENABLED
       value: "false"
-
   apps:
-    - siddhi-apps
-  siddhi: |
-    refs:
-        - ref:
-          name: 'passthroughDevicePower'
-          type: 'http'
-          properties:
-            receiver.url: ${RECEIVER_URL}/devicePowerStream
-            basic.auth.enabled: ${BASIC_AUTH_ENABLED}
+    - app2
+
+
   
 
 

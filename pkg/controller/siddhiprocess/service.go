@@ -14,16 +14,14 @@ import(
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *corev1.Service {
 	labels := labelsForSiddhiProcess(siddhiProcess.Name)
 	var servicePorts []corev1.ServicePort
-	var siddhiApps []SiddhiApp
-	siddhiApps = getSiddhiAppInfo() 
-	for _, siddhiApp := range siddhiApps{
-		for _, port := range siddhiApp.Ports{
-			servicePort := corev1.ServicePort{
-				Port: int32(port),
-				Name: strings.ToLower(siddhiApp.Name) + strconv.Itoa(port),
-			}
-			servicePorts = append(servicePorts, servicePort)
+	var siddhiApp SiddhiApp
+	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	for _, port := range siddhiApp.Ports{
+		servicePort := corev1.ServicePort{
+			Port: int32(port),
+			Name: strings.ToLower(siddhiApp.Name) + strconv.Itoa(port),
 		}
+		servicePorts = append(servicePorts, servicePort)
 	}
 	service := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -37,7 +35,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(si
 		Spec: corev1.ServiceSpec{
 			Selector: labels,
 			Ports: servicePorts,
-			Type: "LoadBalancer",
+			Type: "ClusterIP",
 		},
 	}
 	controllerutil.SetControllerReference(siddhiProcess, service, reconcileSiddhiProcess.scheme)

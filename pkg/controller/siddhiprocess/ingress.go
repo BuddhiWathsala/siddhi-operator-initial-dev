@@ -32,22 +32,54 @@ const (
 // loadBalancerForSiddhi returns a Siddhi Ingress load balancer object
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *extensionsv1beta1.Ingress {
 	var ingressPaths []extensionsv1beta1.HTTPIngressPath
-	var siddhiApps []SiddhiApp
-	siddhiApps = getSiddhiAppInfo() 
-	for _, siddhiApp := range siddhiApps{
-		for i, port := range siddhiApp.Ports{
-			path := "/" + strings.ToLower(siddhiApp.Name) + "/ep" + strconv.Itoa(i) + "/"
-			ingressPath := extensionsv1beta1.HTTPIngressPath{
-				Path: path,
-				Backend: extensionsv1beta1.IngressBackend{
-					ServiceName: siddhiProcess.Name, 
-					ServicePort: intstr.IntOrString{
-						Type: Int, 
-						IntVal: int32(port),
+	var siddhiApp SiddhiApp
+	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	for _, port := range siddhiApp.Ports{
+		path := "/" + strings.ToLower(siddhiApp.Name) + "/" + strconv.Itoa(port) + "/"
+		ingressPath := extensionsv1beta1.HTTPIngressPath{
+			Path: path,
+			Backend: extensionsv1beta1.IngressBackend{
+				ServiceName: siddhiProcess.Name, 
+				ServicePort: intstr.IntOrString{
+					Type: Int, 
+					IntVal: int32(port),
+				},
+			},
+		}
+		ingressPaths = append(ingressPaths, ingressPath)
+	}
+	var ingressSpec extensionsv1beta1.IngressSpec
+	if siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName != "" {
+		ingressSpec = extensionsv1beta1.IngressSpec{
+			TLS: []extensionsv1beta1.IngressTLS{
+				extensionsv1beta1.IngressTLS{
+					Hosts: []string{"siddhi"},
+					SecretName: siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName,
+				},
+			},
+			Rules: []extensionsv1beta1.IngressRule{
+				{
+					Host: "siddhi",
+					IngressRuleValue: extensionsv1beta1.IngressRuleValue{
+						HTTP: &extensionsv1beta1.HTTPIngressRuleValue{
+							Paths: ingressPaths,
+						},
 					},
 				},
-			}
-			ingressPaths = append(ingressPaths, ingressPath)
+			},
+		}
+	} else {
+		ingressSpec = extensionsv1beta1.IngressSpec{
+			Rules: []extensionsv1beta1.IngressRule{
+				{
+					Host: "siddhi",
+					IngressRuleValue: extensionsv1beta1.IngressRuleValue{
+						HTTP: &extensionsv1beta1.HTTPIngressRuleValue{
+							Paths: ingressPaths,
+						},
+					},
+				},
+			},
 		}
 	}
 	ingress := &extensionsv1beta1.Ingress{
@@ -61,32 +93,9 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProce
 			Annotations: map[string]string{
 				"kubernetes.io/ingress.class": "nginx",
 				"nginx.ingress.kubernetes.io/rewrite-target": "/",
-				"nginx.ingress.kubernetes.io/ssl-redirect": "false",
-				"nginx.ingress.kubernetes.io/force-ssl-redirect": "false",
-				"nginx.ingress.kubernetes.io/ssl-passthrough": "true",
-				"nginx.ingress.kubernetes.io/affinity": "cookie",
-				"nginx.ingress.kubernetes.io/session-cookie-name": "route",
-				"nginx.ingress.kubernetes.io/session-cookie-hash": "sha1",
 			},
 		},
-		Spec: extensionsv1beta1.IngressSpec{
-			TLS: []extensionsv1beta1.IngressTLS{
-				extensionsv1beta1.IngressTLS{
-					Hosts: []string{"siddhi.com"},
-					SecretName: "siddhi-tls",
-				},
-			},
-			Rules: []extensionsv1beta1.IngressRule{
-				{
-					Host: "siddhi.com",
-					IngressRuleValue: extensionsv1beta1.IngressRuleValue{
-						HTTP: &extensionsv1beta1.HTTPIngressRuleValue{
-							Paths: ingressPaths,
-						},
-					},
-				},
-			},
-		},
+		Spec: ingressSpec,
 	}
 	// Set Siddhi instance as the owner and controller
 	controllerutil.SetControllerReference(siddhiProcess, ingress, reconcileSiddhiProcess.scheme)
@@ -98,27 +107,26 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProce
 // updatedLoadBalancerForSiddhiProcess returns a Siddhi Ingress load balancer object
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess, currentIngress *extensionsv1beta1.Ingress) *extensionsv1beta1.Ingress {
 	var ingressPaths []extensionsv1beta1.HTTPIngressPath
-	var siddhiApps []SiddhiApp
-	siddhiApps = getSiddhiAppInfo() 
-	for _, siddhiApp := range siddhiApps{
-		for i, port := range siddhiApp.Ports{
-			path := "/" + strings.ToLower(siddhiApp.Name) + "/ep" + strconv.Itoa(i) + "/"
-			ingressPath := extensionsv1beta1.HTTPIngressPath{
-				Path: path,
-				Backend: extensionsv1beta1.IngressBackend{
-					ServiceName: siddhiProcess.Name, 
-					ServicePort: intstr.IntOrString{
-						Type: Int, 
-						IntVal: int32(port),
-					},
+	var siddhiApp SiddhiApp
+	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	for _, port := range siddhiApp.Ports{
+		path := "/" + strings.ToLower(siddhiApp.Name) + "/" + strconv.Itoa(port) + "/"
+		ingressPath := extensionsv1beta1.HTTPIngressPath{
+			Path: path,
+			Backend: extensionsv1beta1.IngressBackend{
+				ServiceName: siddhiProcess.Name, 
+				ServicePort: intstr.IntOrString{
+					Type: Int, 
+					IntVal: int32(port),
 				},
-			}
-			ingressPaths = append(ingressPaths, ingressPath)
+			},
 		}
+		ingressPaths = append(ingressPaths, ingressPath)
 	}
+	
 	currentRules := currentIngress.Spec.Rules
 	newRule := extensionsv1beta1.IngressRule{
-		Host: "siddhi.com",
+		Host: "siddhi",
 		IngressRuleValue: extensionsv1beta1.IngressRuleValue{
 			HTTP: &extensionsv1beta1.HTTPIngressRuleValue{
 				Paths: ingressPaths,
@@ -134,7 +142,23 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSidd
 	if !ruleExists{
 		currentRules = append(currentRules, newRule)
 	}
-	currentIngress.Spec.Rules= currentRules
+	var ingressSpec extensionsv1beta1.IngressSpec
+	if siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName != "" {
+		ingressSpec = extensionsv1beta1.IngressSpec{
+			TLS: []extensionsv1beta1.IngressTLS{
+				extensionsv1beta1.IngressTLS{
+					Hosts: []string{"siddhi"},
+					SecretName: siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName,
+				},
+			},
+			Rules: currentRules,
+		}
+	} else {
+		ingressSpec = extensionsv1beta1.IngressSpec{
+			Rules: currentRules,
+		}
+	}
+	currentIngress.Spec = ingressSpec
 	controllerutil.SetControllerReference(siddhiProcess, currentIngress, reconcileSiddhiProcess.scheme)
 	return currentIngress
 }
