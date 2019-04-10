@@ -1,9 +1,10 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: app2
+  name: app1
 spec:
   ingress:
+    enable: true
     tls:
       secretName: siddhi-tls
   env: 
@@ -14,7 +15,7 @@ spec:
     - name: BASIC_AUTH_ENABLED
       value: "false"
   apps:
-    - app2
+    - app1
   # query: |
   #   @App:name("App3")
   #   @App:description("Description of the plan") 

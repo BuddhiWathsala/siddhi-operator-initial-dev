@@ -80,7 +80,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling SiddhiProcess")
 	reqLogger.Info(request.Namespace)
-
+	
 	// Fetch the SiddhiProcess instance
 	siddhiProcess := &siddhiv1alpha1.SiddhiProcess{}
 	err := reconcileSiddhiProcess.client.Get(context.TODO(), request.NamespacedName, siddhiProcess)
@@ -94,7 +94,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-
+	siddhiProcess.Status.Status = "Pending"
+	err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
+	if err != nil {
+		reqLogger.Error(err, "Failed to update SiddhiProcess status")
+		return reconcile.Result{}, err
+	}
 	operatorDeployment := &appsv1.Deployment{}
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
 	if err != nil{
@@ -164,35 +169,39 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		return reconcile.Result{}, err
 	}
 
-	ingress := &extensionsv1beta1.Ingress{}
-	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi", Namespace: siddhiProcess.Namespace}, ingress)
-	if err != nil && errors.IsNotFound(err) {
-		// Define a new Ingress
-		siddhiIngress := reconcileSiddhiProcess.loadBalancerForSiddhiProcess(siddhiProcess, siddhiApp)
-		reqLogger.Info("Creating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
-		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiIngress)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+	if siddhiProcess.Spec.SiddhiIngress.Enable {
+		ingress := &extensionsv1beta1.Ingress{}
+		err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi", Namespace: siddhiProcess.Namespace}, ingress)
+		if err != nil && errors.IsNotFound(err) {
+			// Define a new Ingress
+			siddhiIngress := reconcileSiddhiProcess.loadBalancerForSiddhiProcess(siddhiProcess, siddhiApp)
+			reqLogger.Info("Creating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+			err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiIngress)
+			if err != nil {
+				reqLogger.Error(err, "Failed to create new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+				return reconcile.Result{}, err
+			}
+			// Ingress created successfully - return and requeue
+			reqLogger.Info("Ingress created successfully")
+			return reconcile.Result{Requeue: true}, nil
+		} else if err == nil{
+			siddhiIngress := reconcileSiddhiProcess.updatedLoadBalancerForSiddhiProcess(siddhiProcess, ingress, siddhiApp)
+			reqLogger.Info("Updating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+			err = reconcileSiddhiProcess.client.Update(context.TODO(), siddhiIngress)
+			if err != nil {
+				reqLogger.Error(err, "Failed to updated new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+				return reconcile.Result{}, err
+			}
+			// Ingress updated successfully - return and requeue
+			reqLogger.Info("Ingress updated successfully")
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil{
+			reqLogger.Error(err, "Failed to get Ingress")
 			return reconcile.Result{}, err
 		}
-		// Ingress created successfully - return and requeue
-		reqLogger.Info("Ingress created successfully")
-		return reconcile.Result{Requeue: true}, nil
-	} else if err == nil{
-		siddhiIngress := reconcileSiddhiProcess.updatedLoadBalancerForSiddhiProcess(siddhiProcess, ingress, siddhiApp)
-		reqLogger.Info("Updating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
-		err = reconcileSiddhiProcess.client.Update(context.TODO(), siddhiIngress)
-		if err != nil {
-			reqLogger.Error(err, "Failed to updated new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
-			return reconcile.Result{}, err
-		}
-		// Ingress updated successfully - return and requeue
-		reqLogger.Info("Ingress updated successfully")
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil{
-		reqLogger.Error(err, "Failed to get Ingress")
-		return reconcile.Result{}, err
 	}
+
+
 	
 	// Update the SiddhiProcess status with the pod names
 	// List the pods for this siddhiProcess's deployment

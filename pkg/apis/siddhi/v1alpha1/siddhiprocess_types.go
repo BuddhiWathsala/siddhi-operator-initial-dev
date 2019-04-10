@@ -13,6 +13,7 @@ type EnviromentVariable struct{
 // SiddhiIngress contains ingress specs for siddhi 
 type SiddhiIngress struct{
 	TLSSpec TLS `json:"tls"`
+	Enable bool `json:"enable"`
 }
 // TLS contains the TLS configuration of ingress
 type TLS struct{
@@ -33,6 +34,7 @@ type SiddhiProcessSpec struct {
 // +k8s:openapi-gen=true
 type SiddhiProcessStatus struct {
 	Nodes []string `json:"nodes"`
+	Status string `json:"status"`
 }
 
 // SiddhiProcess is the Schema for the siddhiprocesses API
