@@ -15,7 +15,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(si
 	labels := labelsForSiddhiProcess(siddhiProcess.Name)
 	var servicePorts []corev1.ServicePort
 	var siddhiApp SiddhiApp
-	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	siddhiApp = reconcileSiddhiProcess.parseSiddhiApp(siddhiProcess) 
 	for _, port := range siddhiApp.Ports{
 		servicePort := corev1.ServicePort{
 			Port: int32(port),

@@ -4,7 +4,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EnviromentVariable strote env
+// EnviromentVariable to store env name and value
 type EnviromentVariable struct{
 	Name string `json:"name"`
 	Value string `json:"value"`
@@ -18,15 +18,10 @@ type SiddhiIngress struct{
 type TLS struct{
 	SecretName string `json:"secretName"`
 }
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // SiddhiProcessSpec defines the desired state of SiddhiProcess
 // +k8s:openapi-gen=true
 type SiddhiProcessSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
 	Size int32 `json:"size"`
 	Apps []string `json:"apps"`
 	Query string `json:"query"`
@@ -38,14 +33,8 @@ type SiddhiProcessSpec struct {
 // SiddhiProcessStatus defines the observed state of SiddhiProcess
 // +k8s:openapi-gen=true
 type SiddhiProcessStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	// Nodes are the names of the SiddhiProcess pods
 	Nodes []string `json:"nodes"`
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SiddhiProcess is the Schema for the siddhiprocesses API
 // +k8s:openapi-gen=true
@@ -56,8 +45,6 @@ type SiddhiProcess struct {
 	Spec   SiddhiProcessSpec   `json:"spec,omitempty"`
 	Status SiddhiProcessStatus `json:"status,omitempty"`
 }
-
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SiddhiProcessList contains a list of SiddhiProcess
 type SiddhiProcessList struct {

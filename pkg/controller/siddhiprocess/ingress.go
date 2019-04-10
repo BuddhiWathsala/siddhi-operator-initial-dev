@@ -33,7 +33,7 @@ const (
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *extensionsv1beta1.Ingress {
 	var ingressPaths []extensionsv1beta1.HTTPIngressPath
 	var siddhiApp SiddhiApp
-	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	siddhiApp = reconcileSiddhiProcess.parseSiddhiApp(siddhiProcess) 
 	for _, port := range siddhiApp.Ports{
 		path := "/" + strings.ToLower(siddhiApp.Name) + "/" + strconv.Itoa(port) + "/"
 		ingressPath := extensionsv1beta1.HTTPIngressPath{
@@ -108,7 +108,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProce
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess, currentIngress *extensionsv1beta1.Ingress) *extensionsv1beta1.Ingress {
 	var ingressPaths []extensionsv1beta1.HTTPIngressPath
 	var siddhiApp SiddhiApp
-	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
+	siddhiApp = reconcileSiddhiProcess.parseSiddhiApp(siddhiProcess) 
 	for _, port := range siddhiApp.Ports{
 		path := "/" + strings.ToLower(siddhiApp.Name) + "/" + strconv.Itoa(port) + "/"
 		ingressPath := extensionsv1beta1.HTTPIngressPath{

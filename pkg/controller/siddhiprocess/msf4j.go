@@ -10,10 +10,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	siddhiv1alpha1 "github.com/siddhi-io/siddhi-operator/pkg/apis/siddhi/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"k8s.io/apimachinery/pkg/types"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // SiddhiApp contains details about the siddhi app which need by K8s
@@ -25,7 +25,8 @@ type SiddhiApp struct {
 	App string `json:"app"`
 }
 
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) getSiddhiAppInfo(siddhiProcess *siddhiv1alpha1.SiddhiProcess) (siddhiAppStruct SiddhiApp){
+// parseSiddhiApp call MSF4J service and parse a given siddhiApp
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProcess *siddhiv1alpha1.SiddhiProcess) (siddhiAppStruct SiddhiApp){
 	query := siddhiProcess.Spec.Query
 	reqLogger := log.WithValues("Request.Namespace", siddhiProcess.Namespace, "Request.Name", siddhiProcess.Name)
 	var err error
@@ -40,7 +41,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) getSiddhiAppInfo(siddhiPro
 			reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiFileConfigMapName, Namespace: siddhiProcess.Namespace}, configMap)
 			for siddhiFileName, siddhiFileContent := range configMap.Data{
 				var siddhiAppInstance SiddhiApp
-				url := "http://siddhi-process-msf4j." + siddhiProcess.Namespace + ".svc.cluster.local:9095/service/getSiddhiAppInfo/" + siddhiFileName
+				url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9095/parse/" + siddhiFileName
 				req, _ := http.NewRequest("GET", url, nil)
 				q := req.URL.Query()
 				q.Add("siddhiApp", siddhiFileContent)
@@ -86,7 +87,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) getSiddhiAppInfo(siddhiPro
 		}
 	} else if (query != "") && (len(siddhiProcess.Spec.Apps) <= 0) {
 		siddhiFileName := getAppName(query)
-		url := "http://siddhi-process-msf4j." + siddhiProcess.Namespace + ".svc.cluster.local:9095/service/getSiddhiAppInfo/" + siddhiFileName
+		url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9095/parse/" + siddhiFileName
 		req, _ := http.NewRequest("GET", url, nil)
 		q := req.URL.Query()
 		q.Add("siddhiApp", query)
@@ -104,6 +105,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) getSiddhiAppInfo(siddhiPro
 	return siddhiAppStruct
 }
 
+// isIn used to find element in a given slice
 func isIn(slice []int, element int) (bool){
 	for _, e := range slice {
 		if e == element{
@@ -115,8 +117,7 @@ func isIn(slice []int, element int) (bool){
 
 
 // configMapForSiddhiApp returns a config map for the query string specified by the user in CRD
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) createConfigMap(siddhiProcess *siddhiv1alpha1.SiddhiProcess, dataMap map[string]string, configMapName string) *corev1.ConfigMap{
-	
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) createConfigMap(siddhiProcess *siddhiv1alpha1.SiddhiProcess, dataMap map[string]string, configMapName string) *corev1.ConfigMap{	
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
