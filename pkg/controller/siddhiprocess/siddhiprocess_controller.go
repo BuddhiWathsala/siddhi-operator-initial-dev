@@ -94,12 +94,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-	siddhiProcess.Status.Status = "Pending"
-	err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
-	if err != nil {
-		reqLogger.Error(err, "Failed to update SiddhiProcess status")
-		return reconcile.Result{}, err
-	}
+	
 	operatorDeployment := &appsv1.Deployment{}
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
 	if err != nil{
@@ -119,6 +114,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
+		siddhiProcess.Status.Status = "Pending"
+		err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update SiddhiProcess status")
+			return reconcile.Result{}, err
+		}
 		siddhiDeployment, err := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess, siddhiApp, operatorEnvs)
 		if err != nil{
 			reqLogger.Error(err, err.Error())
@@ -163,6 +164,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 			return reconcile.Result{}, err
 		}
 		// Service created successfully - return and requeue
+		siddhiProcess.Status.Status = "Running"
+		err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update SiddhiProcess status")
+			return reconcile.Result{}, err
+		}
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get Service")

@@ -4,7 +4,7 @@ metadata:
   name: app1
 spec:
   ingress:
-    enable: true
+    enable: false
     tls:
       secretName: siddhi-tls
   env: 
