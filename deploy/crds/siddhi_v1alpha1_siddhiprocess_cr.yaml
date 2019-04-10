@@ -3,7 +3,6 @@ kind: SiddhiProcess
 metadata:
   name: app2
 spec:
-  size: 1
   ingress:
     tls:
       secretName: siddhi-tls

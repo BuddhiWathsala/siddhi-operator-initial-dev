@@ -10,7 +10,6 @@ import(
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // IntOrString integer or string
@@ -30,10 +29,8 @@ const (
 )
 
 // loadBalancerForSiddhi returns a Siddhi Ingress load balancer object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *extensionsv1beta1.Ingress {
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess, siddhiApp SiddhiApp) *extensionsv1beta1.Ingress {
 	var ingressPaths []extensionsv1beta1.HTTPIngressPath
-	var siddhiApp SiddhiApp
-	siddhiApp = reconcileSiddhiProcess.parseSiddhiApp(siddhiProcess) 
 	for _, port := range siddhiApp.Ports{
 		path := "/" + strings.ToLower(siddhiApp.Name) + "/" + strconv.Itoa(port) + "/"
 		ingressPath := extensionsv1beta1.HTTPIngressPath{
@@ -97,18 +94,14 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProce
 		},
 		Spec: ingressSpec,
 	}
-	// Set Siddhi instance as the owner and controller
-	controllerutil.SetControllerReference(siddhiProcess, ingress, reconcileSiddhiProcess.scheme)
 	return ingress
 }
 
 
 
 // updatedLoadBalancerForSiddhiProcess returns a Siddhi Ingress load balancer object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess, currentIngress *extensionsv1beta1.Ingress) *extensionsv1beta1.Ingress {
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess, currentIngress *extensionsv1beta1.Ingress, siddhiApp SiddhiApp) *extensionsv1beta1.Ingress {
 	var ingressPaths []extensionsv1beta1.HTTPIngressPath
-	var siddhiApp SiddhiApp
-	siddhiApp = reconcileSiddhiProcess.parseSiddhiApp(siddhiProcess) 
 	for _, port := range siddhiApp.Ports{
 		path := "/" + strings.ToLower(siddhiApp.Name) + "/" + strconv.Itoa(port) + "/"
 		ingressPath := extensionsv1beta1.HTTPIngressPath{
@@ -159,6 +152,5 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSidd
 		}
 	}
 	currentIngress.Spec = ingressSpec
-	controllerutil.SetControllerReference(siddhiProcess, currentIngress, reconcileSiddhiProcess.scheme)
 	return currentIngress
 }

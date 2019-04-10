@@ -22,7 +22,6 @@ type TLS struct{
 // SiddhiProcessSpec defines the desired state of SiddhiProcess
 // +k8s:openapi-gen=true
 type SiddhiProcessSpec struct {
-	Size int32 `json:"size"`
 	Apps []string `json:"apps"`
 	Query string `json:"query"`
 	SiddhiConfig string `json:"siddhi.runner.configs"`

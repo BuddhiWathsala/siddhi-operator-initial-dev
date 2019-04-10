@@ -32,7 +32,18 @@ spec:
                 fieldRef:
                   fieldPath: metadata.name
             - name: OPERATOR_NAME
-              value: "siddhi-operator"
+              value: siddhi-operator
+            - name: OPERATOR_VERSION
+              value: v0.0.1
+            - name: SIDDHI_RUNNER_IMAGE
+              value: buddhiwathsala/siddhirunner:v0.0.6
+            - name: SIDDHI_RUNNER_IMAGE_SECRET
+              value: null
+            - name: SIDDHI_RUNNER_HOME
+              value: /home/siddhi-runner-1.0.0-SNAPSHOT/
+            - name: SIDDHI_PARSER_URL
+              value: siddhisecret
+
 
 ---
 apiVersion: extensions/v1beta1
@@ -41,7 +52,7 @@ metadata:
   annotations:
     deployment.kubernetes.io/revision: "1"
   generation: 1
-  name: siddhi-process-msf4j
+  name: siddhi-parser
   namespace: default
 spec:
   progressDeadlineSeconds: 600
@@ -68,7 +79,7 @@ spec:
         version: 1.0.0
     spec:
       containers:
-      - image: buddhiwathsala/msf4j-siddhi-sample:v0.0.5
+      - image: buddhiwathsala/msf4j-siddhi-sample:v0.0.6
         imagePullPolicy: IfNotPresent
         name: siddhirunner-msf4j
         ports:
@@ -81,10 +92,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: siddhi-process-msf4j
+  name: siddhi-parser
   namespace: default
 spec:
-  clusterIP: 10.108.98.162
   externalTrafficPolicy: Cluster
   ports:
   - name: msf4j
