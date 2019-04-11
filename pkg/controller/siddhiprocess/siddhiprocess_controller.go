@@ -176,7 +176,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		return reconcile.Result{}, err
 	}
 
-	if siddhiProcess.Spec.SiddhiIngress.Enable {
+	if (operatorEnvs["AUTO_INGRESS_CREATION"] != "") && (operatorEnvs["AUTO_INGRESS_CREATION"] != "false"){
 		ingress := &extensionsv1beta1.Ingress{}
 		err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi", Namespace: siddhiProcess.Namespace}, ingress)
 		if err != nil && errors.IsNotFound(err) {

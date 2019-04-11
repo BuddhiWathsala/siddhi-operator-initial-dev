@@ -24,7 +24,6 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	siddhiConfig := siddhiProcess.Spec.SiddhiConfig
 	deploymentYAMLConfigMapName := siddhiProcess.Name + "-deployment.yaml"
 	siddhiHome := operatorEnvs["SIDDHI_RUNNER_HOME"]
-	siddhiRunnerImage := operatorEnvs["SIDDHI_RUNNER_IMAGE"]
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
 	var imagePullSecrets []corev1.LocalObjectReference
@@ -32,6 +31,29 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	var containerPorts []corev1.ContainerPort
 	var err error
 	var sidddhiDeployment *appsv1.Deployment
+
+	siddhiRunnerImageName := strings.TrimSpace(operatorEnvs["SIDDHI_RUNNER_IMAGE"])
+	siddhiRunnerImagetag := strings.TrimSpace(operatorEnvs["SIDDHI_RUNNER_IMAGE_TAG"])
+	siddhiRunnerImage := siddhiRunnerImageName + ":" + siddhiRunnerImagetag
+	if operatorEnvs["SIDDHI_RUNNER_IMAGE_SECRET"] != "" {
+		siddhiRunnerImageSecret := strings.TrimSpace(operatorEnvs["SIDDHI_RUNNER_IMAGE_SECRET"])
+		secret := corev1.LocalObjectReference{
+			Name: siddhiRunnerImageSecret,
+		}
+		imagePullSecrets = append(imagePullSecrets, secret)
+	}
+	if (siddhiProcess.Spec.SiddhiPod.Image != "") && (siddhiProcess.Spec.SiddhiPod.ImageTag != "") {
+		siddhiRunnerImageName = strings.TrimSpace(siddhiProcess.Spec.SiddhiPod.Image)
+		siddhiRunnerImagetag = strings.TrimSpace(siddhiProcess.Spec.SiddhiPod.ImageTag)
+		siddhiRunnerImage = siddhiRunnerImageName + ":" + siddhiRunnerImagetag
+		if siddhiProcess.Spec.SiddhiPod.ImagePullSecret != "" {
+			siddhiRunnerImageSecret := strings.TrimSpace(siddhiProcess.Spec.SiddhiPod.ImagePullSecret)
+			secret := corev1.LocalObjectReference{
+				Name: siddhiRunnerImageSecret,
+			}
+			imagePullSecrets = append(imagePullSecrets, secret)
+		}
+	}
 	for _, port := range siddhiApp.Ports{
 		containerPort := corev1.ContainerPort{
 			ContainerPort: int32(port),
@@ -136,7 +158,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 			enviromentVariables = append(enviromentVariables, env)
 		}
 	}
-	// userID := int64(802)
+	userID := int64(802)
 	sidddhiDeployment = &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -161,7 +183,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 							Image: siddhiRunnerImage,
 							Name:  "siddhirunner-runtime",
 							Command: []string{
-								"/bin/bash",
+								"sh",
 							},
 							Args: []string{
 								siddhiHome + "bin/worker.sh",
@@ -170,9 +192,9 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 							Ports: containerPorts,
 							VolumeMounts: volumeMounts,
 							Env: enviromentVariables,
-							// SecurityContext: &corev1.SecurityContext{
-							// 	RunAsUser: &userID,
-							// },
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser: &userID,
+							},
 							ImagePullPolicy: corev1.PullAlways,
 						},
 					},

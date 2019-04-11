@@ -10,14 +10,16 @@ type EnviromentVariable struct{
 	Value string `json:"value"`
 }
 
-// SiddhiIngress contains ingress specs for siddhi 
-type SiddhiIngress struct{
-	TLSSpec TLS `json:"tls"`
-	Enable bool `json:"enable"`
-}
 // TLS contains the TLS configuration of ingress
 type TLS struct{
-	SecretName string `json:"secretName"`
+	SecretName string `json:"ingressSecret"`
+}
+
+// Pod contains the POD details
+type Pod struct{
+	Image string `json:"image"`
+	ImageTag string `json:"imageTag"`
+	ImagePullSecret string `json:"imagePullSecret"`
 }
 
 // SiddhiProcessSpec defines the desired state of SiddhiProcess
@@ -27,7 +29,8 @@ type SiddhiProcessSpec struct {
 	Query string `json:"query"`
 	SiddhiConfig string `json:"siddhi.runner.configs"`
 	EnviromentVariables []EnviromentVariable `json:"env"`
-	SiddhiIngress SiddhiIngress `json:"ingress"`
+	SiddhiIngressTLS TLS `json:"tls"`
+	SiddhiPod Pod `json:"pod"`
 }
 
 // SiddhiProcessStatus defines the observed state of SiddhiProcess
@@ -36,6 +39,8 @@ type SiddhiProcessStatus struct {
 	Nodes []string `json:"nodes"`
 	Status string `json:"status"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SiddhiProcess is the Schema for the siddhiprocesses API
 // +k8s:openapi-gen=true
@@ -46,6 +51,8 @@ type SiddhiProcess struct {
 	Spec   SiddhiProcessSpec   `json:"spec,omitempty"`
 	Status SiddhiProcessStatus `json:"status,omitempty"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SiddhiProcessList contains a list of SiddhiProcess
 type SiddhiProcessList struct {

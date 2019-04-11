@@ -46,12 +46,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) loadBalancerForSiddhiProce
 		ingressPaths = append(ingressPaths, ingressPath)
 	}
 	var ingressSpec extensionsv1beta1.IngressSpec
-	if siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName != "" {
+	if siddhiProcess.Spec.SiddhiIngressTLS.SecretName != "" {
 		ingressSpec = extensionsv1beta1.IngressSpec{
 			TLS: []extensionsv1beta1.IngressTLS{
 				extensionsv1beta1.IngressTLS{
 					Hosts: []string{"siddhi"},
-					SecretName: siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName,
+					SecretName: siddhiProcess.Spec.SiddhiIngressTLS.SecretName,
 				},
 			},
 			Rules: []extensionsv1beta1.IngressRule{
@@ -136,12 +136,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) updatedLoadBalancerForSidd
 		currentRules = append(currentRules, newRule)
 	}
 	var ingressSpec extensionsv1beta1.IngressSpec
-	if siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName != "" {
+	if siddhiProcess.Spec.SiddhiIngressTLS.SecretName != "" {
 		ingressSpec = extensionsv1beta1.IngressSpec{
 			TLS: []extensionsv1beta1.IngressTLS{
 				extensionsv1beta1.IngressTLS{
 					Hosts: []string{"siddhi"},
-					SecretName: siddhiProcess.Spec.SiddhiIngress.TLSSpec.SecretName,
+					SecretName: siddhiProcess.Spec.SiddhiIngressTLS.SecretName,
 				},
 			},
 			Rules: currentRules,

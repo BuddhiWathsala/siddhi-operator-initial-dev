@@ -1,12 +1,14 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: app1
+  name: apps
+  version: 1.0.0
 spec:
-  ingress:
-    enable: false
-    tls:
-      secretName: siddhi-tls
+  pod:
+   image: pcnfernando/siddhi-runner-alphine
+   imageTag: v1.0.0
+  tls:
+    ingressSecret: siddhi-tls
   env: 
     - name: RECEIVER_URL
       value: "http://0.0.0.0:8006/foo"
@@ -16,6 +18,7 @@ spec:
       value: "false"
   apps:
     - app1
+    - app2
   # query: |
   #   @App:name("App3")
   #   @App:description("Description of the plan") 
