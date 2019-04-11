@@ -1,3 +1,21 @@
+/*
+ * Copyright (c) 2019 WSO2 Inc. (http:www.wso2.org) All Rights Reserved.
+ *
+ * WSO2 Inc. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http:www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 package siddhiprocess
 
 import (
@@ -7,7 +25,6 @@ import (
 	"errors"
 	"strings"
 	"bytes"
-	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	siddhiv1alpha1 "github.com/siddhi-io/siddhi-operator/pkg/apis/siddhi/v1alpha1"
@@ -33,26 +50,31 @@ type TemplatedApp struct {
 	PropertyMap map[string]string `json:"propertyMap"`
 }
 
+// SiddhiParserRequest is request struct of siddhi-parser
 type SiddhiParserRequest struct{
 	SiddhiApps []string `json:"siddhiApps"`
 	PropertyMap map[string]string `json:"propertyMap"`
 }
 
+// SourceDeploymentConfig hold deployment configs
 type SourceDeploymentConfig struct{
 	ServiceProtocol string `json:"serviceProtocol"`
 	Secured bool `json:"secured"`
 	Port int `json:"port"`
 }
 
+// SourceList hold source list object
 type SourceList struct{
 	SourceDeploymentConfigs []SourceDeploymentConfig `json:"sourceDeploymentConfigs"`
 }
 
+// SiddhiAppConfig holds siddhi app config details
 type SiddhiAppConfig struct{
 	SiddhiApp string `json:"siddhiApp"`
 	SiddhiSourceList SourceList `json:"sourceList"`
 }
 
+// SiddhiParserResponse siddhi-parser response
 type SiddhiParserResponse struct{
 	AppConfig []SiddhiAppConfig `json:"siddhiAppConfigs"`
 }
@@ -84,7 +106,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProce
 		var siddhiParserResponse SiddhiParserResponse
 		b, err := json.Marshal(siddhiParserRequest)
 		if err != nil {
-			fmt.Println(err)
+			reqLogger.Error(err, "JSON marshal error in apps config maps")
 			return siddhiAppStruct, err
 		}
 		var jsonStr = []byte(string(b))
@@ -127,8 +149,6 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProce
 			Protocols: protocols,
 			TLS: tls,
 		}
-		fmt.Println("App Struct")
-		fmt.Println(siddhiAppStruct)
 	} else if (query != "") && (len(siddhiProcess.Spec.Apps) <= 0) {
 		propertyMap := reconcileSiddhiProcess.populateUserEnvs(siddhiProcess)
 		url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9090/service/query/"
@@ -139,7 +159,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProce
 		}
 		b, err := json.Marshal(siddhiParserRequest)
 		if err != nil {
-			fmt.Println(err)
+			reqLogger.Error(err, "JSON marshal error in query siddhi app")
 			return siddhiAppStruct, err
 		}
 		var jsonStr = []byte(string(b))
@@ -169,8 +189,6 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProce
 			Protocols: protocols,
 			TLS: tls,
 		}
-		fmt.Println("Query Struct")
-		fmt.Println(siddhiAppStruct)
 	} else if (query != "") && (len(siddhiProcess.Spec.Apps) > 0){
 		err = errors.New("CRD should only contain either query or app entry")
 	} else {
