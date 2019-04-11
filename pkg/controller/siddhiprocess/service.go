@@ -11,11 +11,9 @@ import(
 )
 
 // serviceForSiddhi returns a Siddhi Service object
-func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess) *corev1.Service {
-	labels := labelsForSiddhiProcess(siddhiProcess.Name)
+func (reconcileSiddhiProcess *ReconcileSiddhiProcess) serviceForSiddhiProcess(siddhiProcess *siddhiv1alpha1.SiddhiProcess, siddhiApp SiddhiApp, operatorEnvs map[string]string) *corev1.Service {
+	labels := labelsForSiddhiProcess(siddhiProcess.Name, operatorEnvs)
 	var servicePorts []corev1.ServicePort
-	var siddhiApp SiddhiApp
-	siddhiApp = reconcileSiddhiProcess.getSiddhiAppInfo(siddhiProcess) 
 	for _, port := range siddhiApp.Ports{
 		servicePort := corev1.ServicePort{
 			Port: int32(port),

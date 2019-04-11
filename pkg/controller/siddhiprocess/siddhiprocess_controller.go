@@ -9,6 +9,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
+	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -18,7 +19,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
@@ -49,7 +49,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
 	// Watch for changes to secondary resource Pods and requeue the owner SiddhiProcess
 	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
@@ -96,12 +95,32 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		return reconcile.Result{}, err
 	}
 	
+	operatorDeployment := &appsv1.Deployment{}
+	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi-operator", Namespace: siddhiProcess.Namespace}, operatorDeployment)
+	if err != nil{
+		reqLogger.Error(err, err.Error())
+		return reconcile.Result{}, err
+	}
+	operatorEnvs := reconcileSiddhiProcess.populateOperatorEnvs(operatorDeployment)
+	var siddhiApp SiddhiApp
+	siddhiApp, err = reconcileSiddhiProcess.parseSiddhiApp(siddhiProcess)
+	if err != nil{
+		reqLogger.Error(err, err.Error())
+		return reconcile.Result{}, err
+	}
+
 	// Check if the deployment already exists, if not create a new one
 	deployment := &appsv1.Deployment{}
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		siddhiDeployment, err := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess)
+		siddhiProcess.Status.Status = "Pending"
+		err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update SiddhiProcess status")
+			return reconcile.Result{}, err
+		}
+		siddhiDeployment, err := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess, siddhiApp, operatorEnvs)
 		if err != nil{
 			reqLogger.Error(err, err.Error())
 			return reconcile.Result{}, err
@@ -121,7 +140,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	}
 
 	// Ensure the deployment size is the same as the spec
-	size := siddhiProcess.Spec.Size
+	size := int32(1)
 	if *deployment.Spec.Replicas != size {
 		deployment.Spec.Replicas = &size
 		err = reconcileSiddhiProcess.client.Update(context.TODO(), deployment)
@@ -137,7 +156,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, service)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new service
-		siddhiService := reconcileSiddhiProcess.serviceForSiddhiProcess(siddhiProcess)
+		siddhiService := reconcileSiddhiProcess.serviceForSiddhiProcess(siddhiProcess, siddhiApp, operatorEnvs)
 		reqLogger.Info("Creating a new Service", "Service.Namespace", siddhiService.Namespace, "Service.Name", siddhiService.Name)
 		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiService)
 		if err != nil {
@@ -145,46 +164,56 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 			return reconcile.Result{}, err
 		}
 		// Service created successfully - return and requeue
+		siddhiProcess.Status.Status = "Running"
+		err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update SiddhiProcess status")
+			return reconcile.Result{}, err
+		}
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get Service")
 		return reconcile.Result{}, err
 	}
 
-	ingress := &extensionsv1beta1.Ingress{}
-	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi", Namespace: siddhiProcess.Namespace}, ingress)
-	if err != nil && errors.IsNotFound(err) {
-		// Define a new Ingress
-		siddhiIngress := reconcileSiddhiProcess.loadBalancerForSiddhiProcess(siddhiProcess)
-		reqLogger.Info("Creating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
-		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiIngress)
-		if err != nil {
-			reqLogger.Error(err, "Failed to create new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+	if (operatorEnvs["AUTO_INGRESS_CREATION"] != "") && (operatorEnvs["AUTO_INGRESS_CREATION"] != "false"){
+		ingress := &extensionsv1beta1.Ingress{}
+		err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: "siddhi", Namespace: siddhiProcess.Namespace}, ingress)
+		if err != nil && errors.IsNotFound(err) {
+			// Define a new Ingress
+			siddhiIngress := reconcileSiddhiProcess.loadBalancerForSiddhiProcess(siddhiProcess, siddhiApp)
+			reqLogger.Info("Creating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+			err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiIngress)
+			if err != nil {
+				reqLogger.Error(err, "Failed to create new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+				return reconcile.Result{}, err
+			}
+			// Ingress created successfully - return and requeue
+			reqLogger.Info("Ingress created successfully")
+			return reconcile.Result{Requeue: true}, nil
+		} else if err == nil{
+			siddhiIngress := reconcileSiddhiProcess.updatedLoadBalancerForSiddhiProcess(siddhiProcess, ingress, siddhiApp)
+			reqLogger.Info("Updating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+			err = reconcileSiddhiProcess.client.Update(context.TODO(), siddhiIngress)
+			if err != nil {
+				reqLogger.Error(err, "Failed to updated new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
+				return reconcile.Result{}, err
+			}
+			// Ingress updated successfully - return and requeue
+			reqLogger.Info("Ingress updated successfully")
+			return reconcile.Result{Requeue: true}, nil
+		} else if err != nil{
+			reqLogger.Error(err, "Failed to get Ingress")
 			return reconcile.Result{}, err
 		}
-		// Ingress created successfully - return and requeue
-		reqLogger.Info("Ingress created successfully")
-		return reconcile.Result{Requeue: true}, nil
-	} else if err == nil{
-		siddhiIngress := reconcileSiddhiProcess.updatedLoadBalancerForSiddhiProcess(siddhiProcess, ingress)
-		reqLogger.Info("Updating a new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
-		err = reconcileSiddhiProcess.client.Update(context.TODO(), siddhiIngress)
-		if err != nil {
-			reqLogger.Error(err, "Failed to updated new Ingress", "Ingress.Namespace", siddhiIngress.Namespace, "Ingress.Name", siddhiIngress.Name)
-			return reconcile.Result{}, err
-		}
-		// Ingress updated successfully - return and requeue
-		reqLogger.Info("Ingress updated successfully")
-		return reconcile.Result{Requeue: true}, nil
-	} else if err != nil{
-		reqLogger.Error(err, "Failed to get Ingress")
-		return reconcile.Result{}, err
 	}
+
+
 	
 	// Update the SiddhiProcess status with the pod names
 	// List the pods for this siddhiProcess's deployment
 	podList := &corev1.PodList{}
-	labelSelector := labels.SelectorFromSet(labelsForSiddhiProcess(siddhiProcess.Name))
+	labelSelector := labels.SelectorFromSet(labelsForSiddhiProcess(siddhiProcess.Name, operatorEnvs))
 	listOps := &client.ListOptions{Namespace: siddhiProcess.Namespace, LabelSelector: labelSelector}
 	err = reconcileSiddhiProcess.client.List(context.TODO(), listOps, podList)
 	if err != nil {
@@ -207,12 +236,12 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 
 // labelsForSiddhiProcess returns the labels for selecting the resources
 // belonging to the given siddhiProcess CR name.
-func labelsForSiddhiProcess(appName string) map[string]string {
+func labelsForSiddhiProcess(appName string, operatorEnvs map[string]string) map[string]string {
 	return map[string]string{
-		"name": "SiddhiProcess",
-		"instance": appName,
-		"version": "1.0.0",
-		"part-of": appName,
+		"siddhi.io/name": "SiddhiProcess",
+		"siddhi.io/instance": operatorEnvs["OPERATOR_NAME"],
+		"siddhi.io/version": operatorEnvs["OPERATOR_VERSION"],
+		"siddhi.io/part-of": operatorEnvs["OPERATOR_NAME"],
 	}
 }
 

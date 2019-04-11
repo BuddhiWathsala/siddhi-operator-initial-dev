@@ -4,45 +4,40 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EnviromentVariable strote env
+// EnviromentVariable to store env name and value
 type EnviromentVariable struct{
 	Name string `json:"name"`
 	Value string `json:"value"`
 }
 
-// SiddhiIngress contains ingress specs for siddhi 
-type SiddhiIngress struct{
-	TLSSpec TLS `json:"tls"`
-}
 // TLS contains the TLS configuration of ingress
 type TLS struct{
-	SecretName string `json:"secretName"`
+	SecretName string `json:"ingressSecret"`
 }
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// Pod contains the POD details
+type Pod struct{
+	Image string `json:"image"`
+	ImageTag string `json:"imageTag"`
+	ImagePullSecret string `json:"imagePullSecret"`
+}
 
 // SiddhiProcessSpec defines the desired state of SiddhiProcess
 // +k8s:openapi-gen=true
 type SiddhiProcessSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	Size int32 `json:"size"`
 	Apps []string `json:"apps"`
 	Query string `json:"query"`
 	SiddhiConfig string `json:"siddhi.runner.configs"`
 	EnviromentVariables []EnviromentVariable `json:"env"`
-	SiddhiIngress SiddhiIngress `json:"ingress"`
+	SiddhiIngressTLS TLS `json:"tls"`
+	SiddhiPod Pod `json:"pod"`
 }
 
 // SiddhiProcessStatus defines the observed state of SiddhiProcess
 // +k8s:openapi-gen=true
 type SiddhiProcessStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
-	// Add custom validation using kubebuilder tags: https://book.kubebuilder.io/beyond_basics/generating_crd.html
-	// Nodes are the names of the SiddhiProcess pods
 	Nodes []string `json:"nodes"`
+	Status string `json:"status"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

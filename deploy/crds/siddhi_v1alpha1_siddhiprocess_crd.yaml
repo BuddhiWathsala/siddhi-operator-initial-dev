@@ -10,6 +10,9 @@ spec:
     listKind: SiddhiProcessList
     plural: siddhiprocesses
     singular: siddhiprocess
+    shortNames:
+      - sp
+      - sps
   scope: Namespaced
   subresources:
     status: {}
