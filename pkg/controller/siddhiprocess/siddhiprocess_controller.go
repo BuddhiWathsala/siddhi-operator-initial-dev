@@ -277,7 +277,7 @@ func labelsForSiddhiProcess(appName string, operatorEnvs map[string]string) map[
 		"siddhi.io/name": "SiddhiProcess",
 		"siddhi.io/instance": operatorEnvs["OPERATOR_NAME"],
 		"siddhi.io/version": operatorEnvs["OPERATOR_VERSION"],
-		"siddhi.io/part-of": operatorEnvs["OPERATOR_NAME"],
+		"siddhi.io/part-of": appName,
 	}
 }
 
