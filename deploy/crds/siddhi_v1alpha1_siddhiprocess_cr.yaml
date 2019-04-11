@@ -1,7 +1,7 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: apps
+  name: app1
   version: 1.0.0
 spec:
   pod:
@@ -18,12 +18,12 @@ spec:
       value: "false"
   apps:
     - app1
-    - app2
+  #   - app2
   # query: |
-  #   @App:name("App3")
+  #   @App:name("App4")
   #   @App:description("Description of the plan") 
 
-  #   @source(type='http', receiver.url='http://0.0.0.0:8006/app3', basic.auth.enabled='false', @map(type='json'))
+  #   @source(type='http', receiver.url='http://0.0.0.0:8280/app4', basic.auth.enabled='false', @map(type='json'))
   #   define stream DevicePowerStream (type string, deviceID string, power int);
 
   #   @sink(type='log', prefix='LOGGER')

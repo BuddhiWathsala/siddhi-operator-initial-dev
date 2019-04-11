@@ -22,6 +22,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+// Status of a Siddhi process
+type Status int
+
+// Tye of status
+const (
+	PENDING Status = iota
+	READY
+	RUNNING
+	ERROR
+)
+
 var log = logf.Log.WithName("controller_siddhiprocess")
 
 // Add creates a new SiddhiProcess Controller and adds it to the Manager. The Manager will set fields on the Controller
@@ -114,21 +125,24 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 	err = reconcileSiddhiProcess.client.Get(context.TODO(), types.NamespacedName{Name: siddhiProcess.Name, Namespace: siddhiProcess.Namespace}, deployment)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		siddhiProcess.Status.Status = "Pending"
+		siddhiProcess.Status.Status = getStatus(PENDING)
 		err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
 		if err != nil {
 			reqLogger.Error(err, "Failed to update SiddhiProcess status")
+			siddhiProcess.Status.Status = getStatus(ERROR)
 			return reconcile.Result{}, err
 		}
 		siddhiDeployment, err := reconcileSiddhiProcess.deploymentForSiddhiProcess(siddhiProcess, siddhiApp, operatorEnvs)
 		if err != nil{
 			reqLogger.Error(err, err.Error())
+			siddhiProcess.Status.Status = getStatus(ERROR)
 			return reconcile.Result{}, err
 		}
 		reqLogger.Info("Creating a new Deployment", "Deployment.Namespace", siddhiDeployment.Namespace, "Deployment.Name", siddhiDeployment.Name)
 		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiDeployment)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", siddhiDeployment.Namespace, "Deployment.Name", siddhiDeployment.Name)
+			siddhiProcess.Status.Status = getStatus(ERROR)
 			return reconcile.Result{}, err
 		}
 		
@@ -136,6 +150,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get Deployment")
+		siddhiProcess.Status.Status = getStatus(ERROR)
 		return reconcile.Result{}, err
 	}
 
@@ -161,18 +176,21 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) Reconcile(request reconcil
 		err = reconcileSiddhiProcess.client.Create(context.TODO(), siddhiService)
 		if err != nil {
 			reqLogger.Error(err, "Failed to create new Service", "Service.Namespace", siddhiService.Namespace, "Service.Name", siddhiService.Name)
+			siddhiProcess.Status.Status = getStatus(ERROR)
 			return reconcile.Result{}, err
 		}
 		// Service created successfully - return and requeue
-		siddhiProcess.Status.Status = "Running"
+		siddhiProcess.Status.Status = getStatus(RUNNING)
 		err = reconcileSiddhiProcess.client.Status().Update(context.TODO(), siddhiProcess)
 		if err != nil {
 			reqLogger.Error(err, "Failed to update SiddhiProcess status")
+			siddhiProcess.Status.Status = getStatus(ERROR)
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
 	} else if err != nil {
 		reqLogger.Error(err, "Failed to get Service")
+		siddhiProcess.Status.Status = getStatus(ERROR)
 		return reconcile.Result{}, err
 	}
 
@@ -252,4 +270,17 @@ func getPodNames(pods []corev1.Pod) []string {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
+}
+
+// Status array
+var status = []string{
+	"Pending",
+	"Ready",
+	"Running",
+	"Error",
+}
+
+// getStatus return relevant status to a given int
+func getStatus(n Status) string {
+	return status[n]
 }
