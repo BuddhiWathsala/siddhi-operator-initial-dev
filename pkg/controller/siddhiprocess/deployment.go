@@ -97,7 +97,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 		for siddhiFileName := range configMap.Data{
 			volumeMount := corev1.VolumeMount{
 				Name: configMapName,
-				MountPath: siddhiHome + "wso2/worker/deployment/siddhi-files/" + siddhiFileName,
+				MountPath: siddhiHome + "wso2/runner/deployment/siddhi-files/" + siddhiFileName,
 				SubPath:  siddhiFileName,
 			}
 			volumeMounts = append(volumeMounts, volumeMount)
@@ -106,8 +106,8 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 	} else if (query != "") && (len(siddhiProcess.Spec.Apps) <= 0){
 		query = strings.TrimSpace(query)
 		appName := getAppName(query)
-		configMapName := strings.ToLower(appName)
-		configMap := reconcileSiddhiProcess.configMapForSiddhiApp(siddhiProcess, query, appName)
+		configMapName := strings.ToLower(siddhiProcess.Name) + "-siddhi"
+		configMap := reconcileSiddhiProcess.configMapForSiddhiApp(siddhiProcess, query, configMapName)
 		reqLogger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", configMap.Namespace, "ConfigMap.Name", configMap.Name)
 		err := reconcileSiddhiProcess.client.Create(context.TODO(), configMap)
 		if err != nil {
@@ -127,7 +127,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 		
 			volumeMount := corev1.VolumeMount{
 				Name: configMapName,
-				MountPath: siddhiHome + "wso2/worker/deployment/siddhi-files/" + appName + ".siddhi",
+				MountPath: siddhiHome + "wso2/runner/deployment/siddhi-files/" + appName + ".siddhi",
 				SubPath:  appName + ".siddhi",
 			}
 			volumeMounts = append(volumeMounts, volumeMount)
@@ -204,7 +204,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 								"sh",
 							},
 							Args: []string{
-								siddhiHome + "bin/worker.sh",
+								siddhiHome + "bin/runner.sh",
 								configParameter,
 							},
 							Ports: containerPorts,
@@ -228,14 +228,14 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) deploymentForSiddhiProcess
 
 // configMapForSiddhiApp returns a config map for the query string specified by the user in CRD
 func (reconcileSiddhiProcess *ReconcileSiddhiProcess) configMapForSiddhiApp(siddhiProcess *siddhiv1alpha1.SiddhiProcess, query string, appName string) *corev1.ConfigMap {
-	configMapKey := appName + ".siddhi"
+	configMapKey := getAppName(query) + ".siddhi"
 	configMap := &corev1.ConfigMap{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      strings.ToLower(appName),
+			Name:      appName,
 			Namespace: siddhiProcess.Namespace,
 		},
 		Data: map[string]string{
