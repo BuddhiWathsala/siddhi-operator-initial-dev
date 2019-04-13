@@ -102,7 +102,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProce
 			SiddhiApps: siddhiApps,
 			PropertyMap: propertyMap,
 		}
-		url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9090/service/query/"
+		url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9090/siddhi-parser/parse"
 		var siddhiParserResponse SiddhiParserResponse
 		b, err := json.Marshal(siddhiParserRequest)
 		if err != nil {
@@ -151,7 +151,7 @@ func (reconcileSiddhiProcess *ReconcileSiddhiProcess) parseSiddhiApp(siddhiProce
 		}
 	} else if (query != "") && (len(siddhiProcess.Spec.Apps) <= 0) {
 		propertyMap := reconcileSiddhiProcess.populateUserEnvs(siddhiProcess)
-		url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9090/service/query/"
+		url := "http://siddhi-parser." + siddhiProcess.Namespace + ".svc.cluster.local:9090/siddhi-parser/parse"
 		var siddhiParserResponse SiddhiParserResponse
 		siddhiParserRequest := SiddhiParserRequest{
 			SiddhiApps: []string{query},

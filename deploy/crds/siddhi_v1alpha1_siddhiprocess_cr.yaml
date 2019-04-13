@@ -1,12 +1,12 @@
 apiVersion: siddhi.io/v1alpha1
 kind: SiddhiProcess
 metadata:
-  name: app1
+  name: example-siddhi-deployment
   version: 1.0.0
 spec:
   pod:
-   image: pcnfernando/siddhi-runner-alphine
-   imageTag: v1.0.0
+   image: siddhiio/siddhi-runner
+   imageTag: v0.1.0
   tls:
     ingressSecret: siddhi-tls
   env: 
@@ -16,23 +16,33 @@ spec:
       value: "http://0.0.0.0:8007/bar"
     - name: BASIC_AUTH_ENABLED
       value: "false"
-  apps:
-    - app1
+  # apps:
+  #   - app1
   #   - app2
-  # query: |
-  #   @App:name("App4")
-  #   @App:description("Description of the plan") 
+  query: |
+    @App:name("Example-Siddhi")
+    @App:description("Description of the plan") 
+    
+    @sink(type='log', prefix='LOGGER')
+    @source(type='http', receiver.url='http://0.0.0.0:8280/example', basic.auth.enabled='false', @map(type='json'))
+    define stream DevicePowerStream (type string, deviceID string, power int);
 
-  #   @source(type='http', receiver.url='http://0.0.0.0:8280/app4', basic.auth.enabled='false', @map(type='json'))
-  #   define stream DevicePowerStream (type string, deviceID string, power int);
+    
+    define stream MonitorDevicesPowerStream(deviceID string, power int);
 
-  #   @sink(type='log', prefix='LOGGER')
-  #   define stream MonitorDevicesPowerStream(deviceID string, power int);
-
-  #   @info(name='monitored-filter')
-  #   from DevicePowerStream[type == 'monitored']
-  #   select deviceID, power
-  #   insert into MonitorDevicesPowerStream;
+    @info(name='monitored-filter')
+    from DevicePowerStream[type == 'monitored']
+    select deviceID, power
+    insert into MonitorDevicesPowerStream;
+  siddhi.runner.configs: |
+    state.persistence:
+      enabled: true
+      intervalInMin: 1
+      revisionsToKeep: 2
+      persistenceStore: io.siddhi.distribution.core.persistence.FileSystemPersistenceStore
+      config:
+        location: siddhi-app-persistence
+  
 
 
   
